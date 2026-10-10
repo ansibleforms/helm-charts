@@ -102,6 +102,26 @@ spec:
                 secretKeyRef:
                   name: {{ $secretName }}
                   key: DB_PASSWORD
+            {{- $dbUser := include "ansibleforms.dbUser" . }}
+            {{- if and $dbUser (ne $dbUser "root") }}
+            {{- /*
+              A user of its own, with rights on the AnsibleForms schema only : the
+              image creates it with the schema on the first boot. Root stays on
+              localhost, for the server's own administration.
+            */}}
+            - name: MYSQL_DATABASE
+              value: AnsibleForms
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: DB_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: DB_PASSWORD
+            {{- end }}
             {{- with $mysql.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

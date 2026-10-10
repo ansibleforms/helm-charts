@@ -7,7 +7,7 @@ type: application
 # AnsibleForms version the default image points at. They used to be kept in
 # lockstep, which stopped being true as soon as the chart needed a fix of its
 # own, so they are tracked separately from here on.
-version: 7.0.0
+version: 7.0.1
 appVersion: "7.0.0"
 
 home: https://ansibleforms.com

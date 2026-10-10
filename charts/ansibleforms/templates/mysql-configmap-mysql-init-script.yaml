@@ -18,9 +18,17 @@ metadata:
     {{- . | nindent 4 }}
   {{- end }}
 data:
+  {{- $dbUser := include "ansibleforms.dbUser" . }}
   init.sql: |
-    -- The bundled server starts with a root account restricted to localhost,
-    -- and AnsibleForms connects over the network from another pod.
+    {{- if or (not $dbUser) (eq $dbUser "root") }}
+    -- AnsibleForms connects as root : the bundled server starts with a root
+    -- account restricted to localhost, and AnsibleForms connects over the
+    -- network from another pod.
     GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
     FLUSH PRIVILEGES;
+    {{- else }}
+    -- AnsibleForms connects as {{ $dbUser }}, which the image creates from
+    -- MYSQL_USER with rights on the AnsibleForms schema only : nothing to grant.
+    SELECT 1;
+    {{- end }}
 {{- end }}

@@ -14,7 +14,7 @@ values.yaml itself and in the [README](README.md).
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | applications.mysql.password | string | `"<ENTER_PASSWORD_HERE>"` | Database password. Leave out with secrets.existingSecret or secrets.generate. |
-| applications.mysql.user | string | `"root"` | Database user. |
+| applications.mysql.user | string | `""` | Database user. Empty : "ansibleforms" on a new install with the bundled MySQL, which creates it with rights on the AnsibleForms schema only ; root with your own database ; an upgrade keeps the user its Secret holds. |
 | applications.rte.env | object | `{}` | Environment variables for the RTE (ANSIBLE_PATH, PROCESS_MAX_BUFFER, NODE_EXTRA_CA_CERTS and so on). |
 | applications.rte.token | string | `""` | RTE token, 16 characters or more. Empty generates one. Ignored with containers.rte.existingTokenSecret. |
 | applications.server.env | object | `{"ADMIN_PASSWORD":"<ENTER_PASSWORD_HERE>","ADMIN_USERNAME":"admin","ALLOW_ENV_EDIT":0,"ENCRYPTION_SECRET":"<ENTER_SECRET_HERE>","HTTPS":0}` | Environment variables for AnsibleForms. Any application setting can be added here. |

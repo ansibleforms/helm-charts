@@ -1,5 +1,17 @@
 # Changelog
 
+## 7.0.1
+
+### Changed
+
+- **A new install connects to the bundled MySQL as `ansibleforms`, not root.** With
+  `applications.mysql.user` left empty, the bundled MySQL creates that user with rights on
+  the AnsibleForms schema only, and root stays on localhost for the server's own
+  administration. An upgrade keeps the user its Secret already holds, so an existing
+  release goes on connecting as root, and so does a database of your own
+  (`mysql.enabled: false`) when no user is given. Set `applications.mysql.user: root` to
+  choose root on a new install.
+
 ## 7.0.0
 
 AnsibleForms 7.

@@ -95,8 +95,8 @@ applications:
   mysql:
     # -- Database password. Leave out with secrets.existingSecret or secrets.generate.
     password: <ENTER_PASSWORD_HERE>
-    # -- Database user.
-    user: root
+    # -- Database user. Empty : "ansibleforms" on a new install with the bundled MySQL, which creates it with rights on the AnsibleForms schema only ; root with your own database ; an upgrade keeps the user its Secret holds.
+    user: ""
     # Defaults to the bundled service on "mysql":3306. Point these at your own
     # server when mysql.enabled is false.
     # host: "mysql"

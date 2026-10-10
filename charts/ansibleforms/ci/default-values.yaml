@@ -4,7 +4,8 @@
 applications:
   mysql:
     password: ci-not-a-real-password
-    user: root
+    # no user : the default, "ansibleforms", which the bundled MySQL creates with rights on
+    # the AnsibleForms schema only (no-ingress-values.yaml keeps covering root)
   server:
     env:
       HTTPS: 0

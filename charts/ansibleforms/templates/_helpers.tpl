@@ -80,6 +80,32 @@
 {{- end -}}
 
 {{- /*
+  The database user AnsibleForms connects with. Given in values, it is that. Left
+  empty, an upgrade keeps the one the release's Secret already holds (an install
+  from before 7.0.1 connects as root, and its data directory has no other user),
+  and a new install gets "ansibleforms", which the bundled MySQL creates with
+  rights on the AnsibleForms schema only (root with a database of your own, as
+  before : nothing creates the user there). Empty when it cannot be known : an
+  existingSecret rendered without a cluster to read it.
+*/}}
+{{- define "ansibleforms.dbUser" -}}
+{{- $appMysql := (.Values.applications | default dict).mysql | default dict -}}
+{{- $secrets := .Values.secrets | default dict -}}
+{{- if $appMysql.user -}}
+{{- $appMysql.user -}}
+{{- else -}}
+{{- $existing := (lookup "v1" "Secret" .Release.Namespace (include "ansibleforms.secretName" .)) | default dict -}}
+{{- $user := dig "data" "DB_USER" "" $existing -}}
+{{- if $user -}}
+{{- b64dec $user -}}
+{{- else if not $secrets.existingSecret -}}
+{{- /* the bundled MySQL creates "ansibleforms" ; a database of your own keeps the old default */ -}}
+{{- if dig "enabled" true (.Values.mysql | default dict) -}}ansibleforms{{- else -}}root{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- /*
   Labels shared by everything the chart creates, commonLabels included. They go
   on the metadata of every object and on the pod template, but never on a
   selector: a Deployment selector is immutable, so a label added there could
