@@ -588,8 +588,11 @@ and says which value to set, as it does for `secrets.generate`.
 AnsibleForms 7 runs no playbook in the app: every playbook runs on an RTE (runtime
 environment), `ghcr.io/ansibleforms/ansibleforms-rte-full`. The chart runs one as a second
 container in the server pod. It shares the app's volume, so it sees the same playbooks,
-repositories, uploads and SSH key, and the app reaches it on `127.0.0.1:8000`; nothing new
-is published outside the pod.
+repositories, uploads and SSH key, and the app reaches it on `127.0.0.1:8000`. No Service
+publishes that port, but it listens on the pod's address like any container, so other pods
+can reach it there: its jobs API needs the token, `/live` and `/ready` answer anybody, and
+`/metrics` answers only with `METRICS_TOKEN`. `networkPolicy.server` keeps other pods to the
+app's port.
 
 The chart also registers it for you. A config seed creates a runner named `rte`, type RTE,
 ticked as the default, so a playbook form runs on it without any setup. The seed re-applies
@@ -609,9 +612,10 @@ containers:
 ```
 
 The RTE image holds what your playbooks need: ansible, the Python libraries and the
-collections. When yours need more, build your own image from the app's `Dockerfile.rte`,
-adding `RUN ansible-galaxy collection install ...` or `RUN /venv/bin/pip install ...`, and
-point `containers.rte.image` at it. Keep its release on the app's, or on one with the same
+collections. When yours need more, or less, build your own on one of the published layers,
+`ansibleforms-rte-full` or the smaller `ansibleforms-rte-core`, adding
+`RUN ansible-galaxy collection install ...` or `RUN pip install ...`. The app's
+[examples/rte](https://github.com/ansibleforms/ansibleforms/tree/main/examples/rte) has Dockerfiles to start from. Point `containers.rte.image` at it. Keep its release on the app's, or on one with the same
 RTE contract: Test connection under Connections > Runners shows both.
 
 **The token.** The app sends it with every call and the RTE runs no job without it. Left

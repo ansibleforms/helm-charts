@@ -366,7 +366,8 @@ spec:
           The RTE runs the playbooks. Same pod as the app, so it sees the same volume
           (playbooks, repositories, uploads, the SSH key) and the app reaches it on
           127.0.0.1. It reads the job from the database, so it gets the app's database
-          settings and ENCRYPTION_SECRET, and answers only calls carrying RTE_TOKEN.
+          settings and ENCRYPTION_SECRET. Its jobs API answers only calls carrying
+          RTE_TOKEN; /live and /ready need none, /metrics needs METRICS_TOKEN.
         */}}
         - name: rte
           image: {{ $rte.image | required "containers.rte.image is required while containers.rte.enabled is true" }}

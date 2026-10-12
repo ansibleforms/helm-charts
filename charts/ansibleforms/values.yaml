@@ -547,10 +547,15 @@ containers:
   # The RTE, the runtime environment that runs the playbooks. It is a second container in
   # the server pod rather than a Deployment of its own: it needs the app's volume (the
   # playbooks, repositories, uploads and SSH key), and the volume is ReadWriteOnce. The app
-  # reaches it on 127.0.0.1, so its port is never published outside the pod.
+  # reaches it on 127.0.0.1. No Service publishes its port, but it listens on the pod's
+  # address like any container, so other pods can reach it there: its jobs API needs the
+  # token, /live and /ready answer anybody, and /metrics only with METRICS_TOKEN.
+  # networkPolicy.server keeps other pods to the app's port.
   #
   # The image is where your playbooks' dependencies live: collections, Python libraries,
-  # ansible.cfg. Build your own from the app's Dockerfile.rte and point image at it.
+  # ansible.cfg. The app publishes the RTE in layers: ansibleforms-rte-full (the default),
+  # and ansibleforms-rte-core to build a smaller one with only what your playbooks use. Its
+  # examples/rte folder has Dockerfiles to start from; point image at what you build.
   rte:
     # -- Run the RTE next to the app. Without it, playbook forms need a runner added by hand.
     enabled: true

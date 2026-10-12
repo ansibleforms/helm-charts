@@ -41,8 +41,8 @@ AnsibleForms 7.
 
 - **An RTE runs next to the app, in the server pod**, from
   `ghcr.io/ansibleforms/ansibleforms-rte-full:7.0.0`. AnsibleForms 7 runs no playbook itself; the
-  RTE does. It shares the app's volume and is reached on `127.0.0.1`, so nothing new is
-  published. Settings are under `containers.rte`, and `containers.rte.enabled: false` leaves it out.
+  RTE does. It shares the app's volume and is reached on `127.0.0.1`; no Service publishes
+  its port. Settings are under `containers.rte`, and `containers.rte.enabled: false` leaves it out.
 - **The RTE is registered as the default runner through a config seed**, a runner named `rte`
   that is read-only in the interface. The RTE gets the same address as `RTE_URL`, so it
   recognises that runner and adds no other. With `containers.rte.seedRunner: false` or a seed
@@ -84,8 +84,9 @@ AnsibleForms 7.
    the ConfigMap behind `forms.extraFormsConfigMap`.
 4. Move `ANSIBLE_PATH` and `PROCESS_MAX_BUFFER`, if `applications.server.env` sets them, to
    `applications.rte.env`: the RTE reads them now. If your playbooks need collections or
-   Python libraries the RTE image lacks, build your own from the app's `Dockerfile.rte` and
-   set `containers.rte.image`.
+   Python libraries the RTE image lacks, build your own on `ansibleforms-rte-full` or
+   `ansibleforms-rte-core` (see the app's [examples/rte](https://github.com/ansibleforms/ansibleforms/tree/main/examples/rte)) and set
+   `containers.rte.image`.
 5. With Argo CD, Flux or anything else that renders with `helm template`, set
    `applications.mysql.user: root` (or the user your release connects as) before the
    upgrade: the chart cannot read it back from the cluster there, and refuses to guess.
