@@ -54,7 +54,7 @@ values.yaml itself and in the [README](README.md).
 | containers.rte.extraEnv | list | `[]` | Extra env entries for the RTE, written after the generated ones so they win. |
 | containers.rte.extraEnvFrom | list | `[]` | ConfigMaps or Secrets injected as environment into the RTE. |
 | containers.rte.extraVolumeMounts | list | `[]` | Extra volume mounts for the RTE. |
-| containers.rte.image | string | `"ghcr.io/ansibleforms/ansibleforms-rte:7.0.0"` | AnsibleForms RTE image. Keep it on the app's release, or one with the same RTE contract. |
+| containers.rte.image | string | `"ghcr.io/ansibleforms/ansibleforms-rte-full:7.0.0"` | AnsibleForms RTE image. Keep it on the app's release, or one with the same RTE contract. |
 | containers.rte.imagePullPolicy | string | `"IfNotPresent"` | RTE image pull policy. |
 | containers.rte.liveness | object | `{"failureThreshold":3,"periodSeconds":30,"timeoutSeconds":5}` | RTE liveness probe (TCP). |
 | containers.rte.port | int | `8000` | Port the RTE listens on inside the pod. Any free port above 1024. |

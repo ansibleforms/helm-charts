@@ -134,7 +134,7 @@ jobs:
               sys.exit(0)
           values = values.replace(image.group(0), image.group(1) + version, 1)
           # The RTE is released with the app under the same tag
-          values = re.sub(r"(image: ghcr\.io/ansibleforms/ansibleforms-rte:)\d+\.\d+\.\d+",
+          values = re.sub(r"(image: ghcr\.io/ansibleforms/ansibleforms-rte-full:)\d+\.\d+\.\d+",
                           lambda m: m.group(1) + version, values, count=1)
           open(values_path, "w").write(values)
 
@@ -146,13 +146,13 @@ jobs:
           chart = re.sub(r'(?m)^appVersion: "?[0-9.]+"?$', f'appVersion: "{version}"', chart, count=1)
           chart = chart.replace(f"image: ghcr.io/ansibleforms/ansibleforms:{now}",
                                 f"image: ghcr.io/ansibleforms/ansibleforms:{version}")
-          chart = chart.replace(f"image: ghcr.io/ansibleforms/ansibleforms-rte:{now}",
-                                f"image: ghcr.io/ansibleforms/ansibleforms-rte:{version}")
+          chart = chart.replace(f"image: ghcr.io/ansibleforms/ansibleforms-rte-full:{now}",
+                                f"image: ghcr.io/ansibleforms/ansibleforms-rte-full:{version}")
           open(chart_path, "w").write(chart)
 
           log_path = "charts/ansibleforms/CHANGELOG.md"
           log = open(log_path).read()
-          rte = " (the RTE alike)" if "ansibleforms/ansibleforms-rte:" in values else ""
+          rte = " (the RTE alike)" if "ansibleforms/ansibleforms-rte-full:" in values else ""
           image_line = (f"- **The default image is AnsibleForms {version}**,\n"
                         f"  `ghcr.io/ansibleforms/ansibleforms:{version}`{rte}, and `appVersion` follows. See the\n"
                         f"  [{version} release notes](https://github.com/ansibleforms/ansibleforms/releases/tag/{version}).\n")

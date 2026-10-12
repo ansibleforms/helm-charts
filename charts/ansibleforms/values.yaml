@@ -533,7 +533,7 @@ containers:
     # -- Run the RTE next to the app. Without it, playbook forms need a runner added by hand.
     enabled: true
     # -- AnsibleForms RTE image. Keep it on the app's release, or one with the same RTE contract.
-    image: ghcr.io/ansibleforms/ansibleforms-rte:7.0.0
+    image: ghcr.io/ansibleforms/ansibleforms-rte-full:7.0.0
     # -- RTE image pull policy.
     imagePullPolicy: IfNotPresent
     # -- Port the RTE listens on inside the pod. Any free port above 1024.

@@ -31,7 +31,7 @@ AnsibleForms 7.
 ### Added
 
 - **An RTE runs next to the app, in the server pod**, from
-  `ghcr.io/ansibleforms/ansibleforms-rte:7.0.0`. AnsibleForms 7 runs no playbook itself; the
+  `ghcr.io/ansibleforms/ansibleforms-rte-full:7.0.0`. AnsibleForms 7 runs no playbook itself; the
   RTE does. It shares the app's volume and is reached on `127.0.0.1`, so nothing new is
   published. Settings are under `containers.rte`, and `containers.rte.enabled: false` leaves it out.
 - **The RTE is registered as the default runner through a config seed**, a runner named `rte`

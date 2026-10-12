@@ -543,7 +543,7 @@ pod no longer signs everybody out. To choose it yourself, set
 ## Running playbooks: the RTE
 
 AnsibleForms 7 runs no playbook in the app: every playbook runs on an RTE (runtime
-environment), `ghcr.io/ansibleforms/ansibleforms-rte`. The chart runs one as a second
+environment), `ghcr.io/ansibleforms/ansibleforms-rte-full`. The chart runs one as a second
 container in the server pod. It shares the app's volume, so it sees the same playbooks,
 repositories, uploads and SSH key, and the app reaches it on `127.0.0.1:8000`; nothing new
 is published outside the pod.
@@ -561,7 +561,7 @@ applications:
 containers:
   rte:
     enabled: true
-    image: ghcr.io/ansibleforms/ansibleforms-rte:7.0.0
+    image: ghcr.io/ansibleforms/ansibleforms-rte-full:7.0.0
     runnerName: rte
 ```
 

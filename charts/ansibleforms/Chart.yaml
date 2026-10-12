@@ -44,8 +44,8 @@ annotations:
   artifacthub.io/images: |
     - name: ansibleforms
       image: ghcr.io/ansibleforms/ansibleforms:7.0.0
-    - name: ansibleforms-rte
-      image: ghcr.io/ansibleforms/ansibleforms-rte:7.0.0
+    - name: ansibleforms-rte-full
+      image: ghcr.io/ansibleforms/ansibleforms-rte-full:7.0.0
     - name: mysql
       image: mysql:8.4
     - name: helm-test
