@@ -810,6 +810,19 @@ secrets:
 # ==============================================================================
 # INGRESS CONFIGURATION
 # ==============================================================================
+# Behind the Ingress every connection reaches the app from the ingress controller,
+# so the app would take the controller's address for every user: the audit trail
+# would name it, and the per-address sign-in limits (LOGIN_MAX_FAILURES_PER_IP,
+# AUTH_RATE_LIMIT) would hold back everybody at once. With the Ingress on and the
+# server Service a ClusterIP, the chart therefore sets TRUST_PROXY=1: the app reads
+# the client's address from the X-Forwarded-For entry the controller adds, which a
+# client cannot choose.
+#
+# One hop is one controller. With a load balancer that adds its own entry in front
+# of it, set TRUST_PROXY to 2, or to the proxies' addresses, under
+# applications.server.env; "0" there turns it off. With a NodePort or LoadBalancer
+# Service clients can reach the app without the controller, so the chart sets
+# nothing: set TRUST_PROXY to the controller's addresses yourself.
 ingress:
   # -- Annotations on the Ingress.
   annotations:
@@ -817,7 +830,7 @@ ingress:
     nginx.ingress.kubernetes.io/ssl-redirect: 'true'
   # -- IngressClass name.
   className: nginx
-  # -- Create an Ingress.
+  # -- Create an Ingress. With a ClusterIP Service it also sets TRUST_PROXY=1 unless applications.server.env sets it.
   enabled: true
   # -- Extra annotations on the Ingress, merged with ingress.annotations.
   extraAnnotations: {}

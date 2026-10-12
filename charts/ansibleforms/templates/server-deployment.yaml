@@ -162,6 +162,12 @@ spec:
             {{- end }}
             {{- end }}
 
+            {{- /* The client's address behind the Ingress, see the helper */}}
+            {{- if eq (include "ansibleforms.server.trustProxyDefault" .) "true" }}
+            - name: TRUST_PROXY
+              value: "1"
+            {{- end }}
+
             {{- /*
               The bundled MySQL Service is named after the release now, so the
               default cannot be the literal "mysql" any more.

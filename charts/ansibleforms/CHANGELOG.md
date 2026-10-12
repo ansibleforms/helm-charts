@@ -56,6 +56,11 @@ AnsibleForms 7.
 - **The RTE has a startup and a liveness probe** on its `/ready` and `/live`, which need no
   token. The startup budget is 300 seconds, as long as the app's, since on a first install it
   waits for the app to create the schema.
+- **`TRUST_PROXY=1` behind the Ingress.** With `ingress.enabled` and a `ClusterIP` Service,
+  the app reads the client's address from the controller's `X-Forwarded-For` entry. Without
+  it every user shared the controller's address, and the per-address sign-in limits of 7
+  (`LOGIN_MAX_FAILURES_PER_IP`, `AUTH_RATE_LIMIT`) held back everybody at once. A
+  `TRUST_PROXY` under `applications.server.env` wins.
 - **`applications.rte.env`** for what the RTE reads rather than the app, such as `ANSIBLE_PATH`.
 - **`ACCESS_TOKEN_SECRET` is set**, generated once into the `<release>-keys` Secret and kept
   across upgrades, so a pod restart no longer signs everybody out. Set

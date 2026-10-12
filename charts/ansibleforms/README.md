@@ -545,6 +545,31 @@ spec:
 Leave `HTTPS: 0` if you would rather have the ingress controller terminate TLS
 and talk plain HTTP inside the cluster, which is what most people want.
 
+### 9. Client addresses behind the ingress
+
+Behind the Ingress every connection reaches AnsibleForms from the ingress controller. Without
+being told so, the app takes the controller's address for every user: the audit trail names
+the controller, and the per-address sign-in limits, `LOGIN_MAX_FAILURES_PER_IP` and
+`AUTH_RATE_LIMIT`, count everybody as one client and hold back every user at once.
+
+So with `ingress.enabled` and the server Service a `ClusterIP` (the defaults), the chart sets
+`TRUST_PROXY=1`. The app then reads the client's address from the `X-Forwarded-For` entry the
+controller adds, which a client cannot choose. One hop is one controller; set it yourself
+under `applications.server.env` when that is not your setup:
+
+```yaml
+applications:
+  server:
+    env:
+      TRUST_PROXY: 2             # a load balancer that adds its own entry, then the controller
+      # TRUST_PROXY: 10.0.0.0/8  # or the proxies' addresses and ranges
+      # TRUST_PROXY: 0           # or off: the connection's address is recorded
+```
+
+With a `NodePort` or `LoadBalancer` Service, clients can reach the app without passing the
+controller and could send any `X-Forwarded-For` they like, so the chart sets nothing there.
+Name the controller's addresses in `TRUST_PROXY` yourself, and avoid `true`, which trusts any client.
+
 ## Sessions across restarts
 
 AnsibleForms signs its sessions with `ACCESS_TOKEN_SECRET`. The chart generates one on the

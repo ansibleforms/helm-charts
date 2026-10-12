@@ -236,6 +236,26 @@ app.kubernetes.io/component: database
 {{- if $base -}}{{- printf "/%s" $base -}}{{- end -}}
 {{- end -}}
 
+{{- /*
+  Whether the chart sets TRUST_PROXY=1. Behind the Ingress every connection comes from the
+  controller, so without it the app takes the controller's address for every user: the
+  audit trail names the controller, and the per-address sign-in limits
+  (LOGIN_MAX_FAILURES_PER_IP, AUTH_RATE_LIMIT) hold everybody back at once. One hop is a
+  single controller, which writes or appends the X-Forwarded-For entry the app then reads,
+  so a client cannot choose it. Only with the Service a ClusterIP: a NodePort or a
+  LoadBalancer reaches the app without the controller, and there X-Forwarded-For is
+  whatever the client sent. Never over a TRUST_PROXY of the user's.
+*/}}
+{{- define "ansibleforms.server.trustProxyDefault" -}}
+{{- $env := (((.Values.applications | default dict).server | default dict).env | default dict) -}}
+{{- $set := hasKey $env "TRUST_PROXY" -}}
+{{- range $e := (dig "server" "extraEnv" (list) (.Values.containers | default dict)) -}}
+{{- if eq (toString $e.name) "TRUST_PROXY" -}}{{- $set = true -}}{{- end -}}
+{{- end -}}
+{{- $type := dig "server" "type" "ClusterIP" (.Values.services | default dict) | default "ClusterIP" -}}
+{{- if and (dig "enabled" false (.Values.ingress | default dict)) (eq $type "ClusterIP") (not $set) -}}true{{- else -}}false{{- end -}}
+{{- end -}}
+
 {{- define "ansibleforms.server.scheme" -}}
 {{- if eq (include "ansibleforms.server.https" .) "true" -}}HTTPS{{- else -}}HTTP{{- end -}}
 {{- end -}}

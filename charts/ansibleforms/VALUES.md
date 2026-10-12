@@ -100,7 +100,7 @@ values.yaml itself and in the [README](README.md).
 | imagePullSecrets | list | `[]` | Pull secrets for both images; they must already exist in the namespace. |
 | ingress.annotations | object | `{"nginx.ingress.kubernetes.io/rewrite-target":"/","nginx.ingress.kubernetes.io/ssl-redirect":"true"}` | Annotations on the Ingress. |
 | ingress.className | string | `"nginx"` | IngressClass name. |
-| ingress.enabled | bool | `true` | Create an Ingress. |
+| ingress.enabled | bool | `true` | Create an Ingress. With a ClusterIP Service it also sets TRUST_PROXY=1 unless applications.server.env sets it. |
 | ingress.extraAnnotations | object | `{}` | Extra annotations on the Ingress, merged with ingress.annotations. |
 | ingress.extraHosts | list | `[]` | Additional hostnames. |
 | ingress.extraPaths | list | `[]` | Additional paths. |
