@@ -87,14 +87,28 @@ AnsibleForms 7.
    Python libraries the RTE image lacks, build your own on `ansibleforms-rte-full` or
    `ansibleforms-rte-core` (see the app's [examples/rte](https://github.com/ansibleforms/ansibleforms/tree/main/examples/rte)) and set
    `containers.rte.image`.
-5. With Argo CD, Flux or anything else that renders with `helm template`, set
+5. Move the mounts your playbooks read, such as an `ansible.cfg`, roles, collections or a
+   custom CA, from `containers.server.extraVolumeMounts` to `containers.rte.extraVolumeMounts`:
+   the playbooks run in the RTE container now. `extraVolumes` stays where it is, the pod
+   shares it. Keep a CA mount on the server too when the app itself needs it (LDAP, AWX, git repositories).
+6. With `NODE_EXTRA_CA_CERTS` under `applications.server.env`, set it under
+   `applications.rte.env` as well, pointing at the CA mounted in the RTE container.
+7. Launch validation is on: `LAUNCH_VALIDATION` defaults to `enforce` (6.5: `off`). A launch
+   through the REST API must also send `rawFormData`, the raw field values, as the browser
+   does. Set `LAUNCH_VALIDATION: log` under `applications.server.env` first to see in
+   the log what would be refused; `off` restores 6.5's behaviour.
+8. An admin who still signs in with the public default password, `AnsibleForms!123`, has to
+   choose a new one first: until then every other API call answers 403
+   `password_change_required`. Change it before the upgrade, and update the scripts that
+   sign in with it.
+9. With Argo CD, Flux or anything else that renders with `helm template`, set
    `applications.mysql.user: root` (or the user your release connects as) before the
    upgrade: the chart cannot read it back from the cluster there, and refuses to guess.
    Set `applications.server.env.ACCESS_TOKEN_SECRET` and `applications.rte.token` (or
    `containers.rte.existingTokenSecret`) too, which the chart cannot generate there.
    `helm upgrade` needs none of this.
-6. Upgrade the chart. On its first start 7 migrates the database, and the `rte` runner
-   appears as the default under Connections > Runners.
+10. Upgrade the chart. On its first start 7 migrates the database, and the `rte` runner
+    appears as the default under Connections > Runners.
 
 To stay on 6, pin the chart: `--version "~6"`.
 
