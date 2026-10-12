@@ -712,7 +712,9 @@
             },
             "replicas": {
               "type": "integer",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 1,
+              "description": "0 or 1. Every server pod runs the whole of AnsibleForms (AF_ROLE all: the app, the worker and the scheduler) and its own RTE on one shared volume, and the chart does not split the roles over Deployments, so a second pod is not a replica of the first. 0 stops it."
             },
             "strategy": {
               "oneOf": [

@@ -36,6 +36,9 @@ AnsibleForms 7.
   readiness probes, `/api/v2/live` for liveness, instead of `/`. Ready now means the database
   answers and the schema is complete. With `BASE_URL` set the chart puts it in front of the
   probe paths; a `path` of your own that already includes it has to drop it.
+- **`containers.server.replicas` is 0 or 1**, and the schema refuses more: each server pod
+  runs the whole app and its own RTE on one volume, and the chart does not split the roles.
+  `0` now stops the server; it used to render as 1.
 
 ### Added
 

@@ -76,7 +76,7 @@ values.yaml itself and in the [README](README.md).
 | containers.server.podSecurityContext | object | `{"fsGroup":1000,"fsGroupChangePolicy":"OnRootMismatch","runAsGroup":1000,"runAsNonRoot":true,"runAsUser":1000,"seccompProfile":{"type":"RuntimeDefault"}}` | Server pod security context. Set to null together with securityContext to drop both. |
 | containers.server.priorityClassName | string | `""` | Server pod priority class. |
 | containers.server.readiness | object | `{"failureThreshold":3,"initialDelaySeconds":15,"path":"/api/v2/ready","periodSeconds":15,"timeoutSeconds":15}` | Server readiness probe (HTTP). The path is relative to BASE_URL. |
-| containers.server.replicas | int | `1` | Server replicas. Keep 1: the pods share one volume and one scheduler. |
+| containers.server.replicas | int | `1` | Server replicas, 0 or 1. Each pod runs the whole app and its own RTE; 0 stops it. |
 | containers.server.resources | object | `{"limits":{"cpu":"4","memory":"4096Mi"},"requests":{"cpu":"1","memory":"1024Mi"}}` | Server container resources. |
 | containers.server.serviceAccountName | string | `""` | Existing ServiceAccount for the server pod. Empty uses the namespace default. |
 | containers.server.startup | object | `{"enabled":true,"failureThreshold":30,"initialDelaySeconds":10,"path":"/api/v2/ready","periodSeconds":10,"timeoutSeconds":5}` | Server startup probe (HTTP). The path is relative to BASE_URL. |

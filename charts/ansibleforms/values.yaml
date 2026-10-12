@@ -340,7 +340,11 @@ containers:
   server:
     # -- AnsibleForms image.
     image: ghcr.io/ansibleforms/ansibleforms:7.0.0
-    # -- Server replicas. Keep 1: the pods share one volume and one scheduler.
+    # One pod or none. Each server pod runs the whole of AnsibleForms (the app, the
+    # worker and the scheduler, AF_ROLE all) and its own RTE on the one shared volume,
+    # and the chart does not split those roles over Deployments of their own, so a
+    # second pod would not be a replica of the first. The schema refuses more than 1.
+    # -- Server replicas, 0 or 1. Each pod runs the whole app and its own RTE; 0 stops it.
     replicas: 1
 
     # Accepts either "Recreate" / "RollingUpdate" or the Kubernetes shape

@@ -61,7 +61,8 @@ metadata:
     {{- . | nindent 4 }}
   {{- end }}
 spec:
-  replicas: {{ $server.replicas | default 1 }}
+  {{- /* hasKey, not default: 0 is a value here, and default would turn it into 1 */}}
+  replicas: {{ if hasKey $server "replicas" }}{{ $server.replicas | int }}{{ else }}1{{ end }}
   {{- /* The selector is immutable on an existing Deployment, leave it alone */}}
   selector:
     matchLabels:
