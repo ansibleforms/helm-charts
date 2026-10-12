@@ -218,6 +218,16 @@ app.kubernetes.io/component: database
 {{- if eq (include "ansibleforms.server.https" .) "true" -}}443{{- else -}}80{{- end -}}
 {{- end -}}
 
+{{- /*
+  BASE_URL, as the app reads it: "" or "/subpath", no slash on the end. The app serves
+  everything under it, its probe endpoints included, so the probe paths are prefixed with it.
+*/}}
+{{- define "ansibleforms.server.basePath" -}}
+{{- $env := (((.Values.applications | default dict).server | default dict).env | default dict) -}}
+{{- $base := trimAll "/" (trim (toString ($env.BASE_URL | default ""))) -}}
+{{- if $base -}}{{- printf "/%s" $base -}}{{- end -}}
+{{- end -}}
+
 {{- define "ansibleforms.server.scheme" -}}
 {{- if eq (include "ansibleforms.server.https" .) "true" -}}HTTPS{{- else -}}HTTP{{- end -}}
 {{- end -}}

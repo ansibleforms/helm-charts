@@ -1020,12 +1020,12 @@ applications:
 containers:
   server:
     liveness:
-      path: /
+      path: /api/v2/live      # relative to BASE_URL, which the chart puts in front
       initialDelaySeconds: 15
       periodSeconds: 15
       timeoutSeconds: 15
     readiness:
-      path: /
+      path: /api/v2/ready     # 503 while the database or the schema is not there
       initialDelaySeconds: 15
       periodSeconds: 15
       timeoutSeconds: 15

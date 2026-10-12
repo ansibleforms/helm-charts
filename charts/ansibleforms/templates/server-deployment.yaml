@@ -45,6 +45,7 @@
 {{- $rteStartup := ($rte.startup | default dict) }}
 {{- $rteLiveness := ($rte.liveness | default dict) }}
 {{- $rtePort := include "ansibleforms.rte.port" . }}
+{{- $basePath := include "ansibleforms.server.basePath" . }}
 
 {{- include "ansibleforms.assertNoRootInitContainer" (dict "component" $server "key" "server") }}
 {{- include "ansibleforms.assertSecurityContextsAgree" (dict "component" $server "key" "server") }}
@@ -276,11 +277,15 @@ spec:
             The startup probe holds the liveness probe back while the database
             migrations run on first boot. Without it a slow start looks like a
             hung process and the kubelet restarts the pod in a loop.
+
+            The app answers /api/v2/live while the process runs and /api/v2/ready once
+            the database answers and its schema is complete, both without a login. They
+            sit under BASE_URL like everything else, so the paths are prefixed with it.
           */}}
           {{- if or (not (hasKey $startup "enabled")) $startup.enabled }}
           startupProbe:
             httpGet:
-              path: {{ $startup.path | default $readiness.path | default "/" }}
+              path: {{ printf "%s%s" $basePath ($startup.path | default $readiness.path | default "/api/v2/ready") }}
               port: http
               scheme: {{ $scheme }}
             initialDelaySeconds: {{ $startup.initialDelaySeconds | default 10 }}
@@ -291,7 +296,7 @@ spec:
 
           livenessProbe:
             httpGet:
-              path: {{ $liveness.path | default "/" }}
+              path: {{ printf "%s%s" $basePath ($liveness.path | default "/api/v2/live") }}
               port: http
               scheme: {{ $scheme }}
             initialDelaySeconds: {{ $liveness.initialDelaySeconds | default 15 }}
@@ -301,7 +306,7 @@ spec:
 
           readinessProbe:
             httpGet:
-              path: {{ $readiness.path | default "/" }}
+              path: {{ printf "%s%s" $basePath ($readiness.path | default "/api/v2/ready") }}
               port: http
               scheme: {{ $scheme }}
             initialDelaySeconds: {{ $readiness.initialDelaySeconds | default 15 }}
@@ -444,18 +449,27 @@ spec:
               drop:
                 - ALL
 
-          {{- /* The API answers only with the token, so the probes open a connection */}}
+          {{- /*
+            /ready and /live need no token (the jobs API does). Ready means the database
+            answers and the app's schema is there, which on a first install comes after the
+            app has created it: the startup budget matches the app's. Plain HTTP, since the
+            chart sets HTTPS=0 on it above.
+          */}}
           startupProbe:
-            tcpSocket:
+            httpGet:
+              path: /ready
               port: rte
+              scheme: HTTP
             initialDelaySeconds: {{ $rteStartup.initialDelaySeconds | default 5 }}
             periodSeconds: {{ $rteStartup.periodSeconds | default 5 }}
             timeoutSeconds: {{ $rteStartup.timeoutSeconds | default 5 }}
-            failureThreshold: {{ $rteStartup.failureThreshold | default 30 }}
+            failureThreshold: {{ $rteStartup.failureThreshold | default 60 }}
 
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /live
               port: rte
+              scheme: HTTP
             periodSeconds: {{ $rteLiveness.periodSeconds | default 30 }}
             timeoutSeconds: {{ $rteLiveness.timeoutSeconds | default 5 }}
             failureThreshold: {{ $rteLiveness.failureThreshold | default 3 }}

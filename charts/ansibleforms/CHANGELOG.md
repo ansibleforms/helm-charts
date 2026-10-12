@@ -28,6 +28,11 @@ AnsibleForms 7.
   (`mysql.enabled: false`) when no user is given. Set `applications.mysql.user: root` to
   choose root on a new install.
 
+- **The server probes ask the app's own endpoints**: `/api/v2/ready` for the startup and
+  readiness probes, `/api/v2/live` for liveness, instead of `/`. Ready now means the database
+  answers and the schema is complete. With `BASE_URL` set the chart puts it in front of the
+  probe paths; a `path` of your own that already includes it has to drop it.
+
 ### Added
 
 - **An RTE runs next to the app, in the server pod**, from
@@ -42,6 +47,9 @@ AnsibleForms 7.
 - **`applications.rte.token`**, the token the app and the RTE share. Left empty, the chart
   generates one into the `<release>-keys` Secret and keeps it across upgrades, or reads it
   from `containers.rte.existingTokenSecret`.
+- **The RTE has a startup and a liveness probe** on its `/ready` and `/live`, which need no
+  token. The startup budget is 300 seconds, as long as the app's, since on a first install it
+  waits for the app to create the schema.
 - **`applications.rte.env`** for what the RTE reads rather than the app, such as `ANSIBLE_PATH`.
 - **`ACCESS_TOKEN_SECRET` is set**, generated once into the `<release>-keys` Secret and kept
   across upgrades, so a pod restart no longer signs everybody out. Set

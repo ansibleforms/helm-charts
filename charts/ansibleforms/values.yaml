@@ -455,25 +455,31 @@ containers:
     # and the app can take minutes to answer. Until it succeeds the liveness
     # probe is not evaluated, which is what stops the restart loop people hit on
     # a fresh install. failureThreshold x periodSeconds is the budget, 300s here.
-    # -- Server startup probe (HTTP).
+    #
+    # The paths are the app's own probe endpoints, which need no login:
+    # /api/v2/live answers while the process runs, /api/v2/ready once the
+    # database answers and the schema is complete (and no longer while the app
+    # stops). With BASE_URL set the chart puts it in front of each path, so leave
+    # it out here.
+    # -- Server startup probe (HTTP). The path is relative to BASE_URL.
     startup:
       enabled: true
-      path: /
+      path: /api/v2/ready
       initialDelaySeconds: 10
       periodSeconds: 10
       timeoutSeconds: 5
       failureThreshold: 30
 
-    # -- Server liveness probe (HTTP).
+    # -- Server liveness probe (HTTP). The path is relative to BASE_URL.
     liveness:
-      path: /
+      path: /api/v2/live
       initialDelaySeconds: 15
       periodSeconds: 15
       timeoutSeconds: 15
       failureThreshold: 3
-    # -- Server readiness probe (HTTP).
+    # -- Server readiness probe (HTTP). The path is relative to BASE_URL.
     readiness:
-      path: /
+      path: /api/v2/ready
       initialDelaySeconds: 15
       periodSeconds: 15
       timeoutSeconds: 15
@@ -573,16 +579,18 @@ containers:
         cpu: 250m
         memory: 256Mi
 
-    # The RTE answers on its port only with the token, so the probes open a connection,
-    # as the image's own health check does. There is no readiness probe on purpose: the
-    # app keeps serving while the RTE restarts, and a job started then fails with a reason.
-    # -- RTE startup probe (TCP).
+    # The RTE's /ready and /live need no token, unlike its jobs API. The startup probe
+    # asks /ready, which answers once the database does and the app's schema is there: on
+    # a first install the app creates it, so the budget matches the app's, 300s here. The
+    # liveness probe asks /live. There is no readiness probe on purpose: the app keeps
+    # serving while the RTE restarts, and a job started then fails with a reason.
+    # -- RTE startup probe (HTTP /ready); failureThreshold x periodSeconds is the budget.
     startup:
       initialDelaySeconds: 5
       periodSeconds: 5
       timeoutSeconds: 5
-      failureThreshold: 30
-    # -- RTE liveness probe (TCP).
+      failureThreshold: 60
+    # -- RTE liveness probe (HTTP /live).
     liveness:
       periodSeconds: 30
       timeoutSeconds: 5

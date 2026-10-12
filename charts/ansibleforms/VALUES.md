@@ -56,12 +56,12 @@ values.yaml itself and in the [README](README.md).
 | containers.rte.extraVolumeMounts | list | `[]` | Extra volume mounts for the RTE. |
 | containers.rte.image | string | `"ghcr.io/ansibleforms/ansibleforms-rte-full:7.0.0"` | AnsibleForms RTE image. Keep it on the app's release, or one with the same RTE contract. |
 | containers.rte.imagePullPolicy | string | `"IfNotPresent"` | RTE image pull policy. |
-| containers.rte.liveness | object | `{"failureThreshold":3,"periodSeconds":30,"timeoutSeconds":5}` | RTE liveness probe (TCP). |
+| containers.rte.liveness | object | `{"failureThreshold":3,"periodSeconds":30,"timeoutSeconds":5}` | RTE liveness probe (HTTP /live). |
 | containers.rte.port | int | `8000` | Port the RTE listens on inside the pod. Any free port above 1024. |
 | containers.rte.resources | object | `{"limits":{"cpu":"2","memory":"2048Mi"},"requests":{"cpu":"250m","memory":"256Mi"}}` | RTE resources. |
 | containers.rte.runnerName | string | `"rte"` | Name of the runner the seed creates. |
 | containers.rte.seedRunner | bool | `true` | Register the RTE as the app's default runner through a config seed. Off, the RTE adds itself as runner 127.0.0.1. |
-| containers.rte.startup | object | `{"failureThreshold":30,"initialDelaySeconds":5,"periodSeconds":5,"timeoutSeconds":5}` | RTE startup probe (TCP). |
+| containers.rte.startup | object | `{"failureThreshold":60,"initialDelaySeconds":5,"periodSeconds":5,"timeoutSeconds":5}` | RTE startup probe (HTTP /ready); failureThreshold x periodSeconds is the budget. |
 | containers.server.affinity | object | `{}` | Server pod affinity. |
 | containers.server.bindPrivilegedPorts | bool | `true` | Let the non-root server bind ports 80 and 443 (sets net.ipv4.ip_unprivileged_port_start). |
 | containers.server.extraEnv | list | `[]` | Extra env entries for the server, written after the generated ones so they win. |
@@ -69,17 +69,17 @@ values.yaml itself and in the [README](README.md).
 | containers.server.image | string | `"ghcr.io/ansibleforms/ansibleforms:7.0.0"` | AnsibleForms image. |
 | containers.server.imagePullSecrets | list | `[]` | Pull secrets for the AnsibleForms image only; overrides imagePullSecrets. |
 | containers.server.initContainers | list | `[]` | Init containers for the server pod. |
-| containers.server.liveness | object | `{"failureThreshold":3,"initialDelaySeconds":15,"path":"/","periodSeconds":15,"timeoutSeconds":15}` | Server liveness probe (HTTP). |
+| containers.server.liveness | object | `{"failureThreshold":3,"initialDelaySeconds":15,"path":"/api/v2/live","periodSeconds":15,"timeoutSeconds":15}` | Server liveness probe (HTTP). The path is relative to BASE_URL. |
 | containers.server.nodeSelector | object | `{}` | Server pod nodeSelector. |
 | containers.server.podAnnotations | object | `{}` | Extra annotations on the server pod; changing them triggers a rollout. |
 | containers.server.podLabels | object | `{}` | Extra labels on the server pod. |
 | containers.server.podSecurityContext | object | `{"fsGroup":1000,"fsGroupChangePolicy":"OnRootMismatch","runAsGroup":1000,"runAsNonRoot":true,"runAsUser":1000,"seccompProfile":{"type":"RuntimeDefault"}}` | Server pod security context. Set to null together with securityContext to drop both. |
 | containers.server.priorityClassName | string | `""` | Server pod priority class. |
-| containers.server.readiness | object | `{"failureThreshold":3,"initialDelaySeconds":15,"path":"/","periodSeconds":15,"timeoutSeconds":15}` | Server readiness probe (HTTP). |
+| containers.server.readiness | object | `{"failureThreshold":3,"initialDelaySeconds":15,"path":"/api/v2/ready","periodSeconds":15,"timeoutSeconds":15}` | Server readiness probe (HTTP). The path is relative to BASE_URL. |
 | containers.server.replicas | int | `1` | Server replicas. Keep 1: the pods share one volume and one scheduler. |
 | containers.server.resources | object | `{"limits":{"cpu":"4","memory":"4096Mi"},"requests":{"cpu":"1","memory":"1024Mi"}}` | Server container resources. |
 | containers.server.serviceAccountName | string | `""` | Existing ServiceAccount for the server pod. Empty uses the namespace default. |
-| containers.server.startup | object | `{"enabled":true,"failureThreshold":30,"initialDelaySeconds":10,"path":"/","periodSeconds":10,"timeoutSeconds":5}` | Server startup probe (HTTP). |
+| containers.server.startup | object | `{"enabled":true,"failureThreshold":30,"initialDelaySeconds":10,"path":"/api/v2/ready","periodSeconds":10,"timeoutSeconds":5}` | Server startup probe (HTTP). The path is relative to BASE_URL. |
 | containers.server.stdin | bool | `false` | Keep stdin open on the server container. |
 | containers.server.strategy | string | `"Recreate"` | Deployment strategy, Recreate or RollingUpdate (or the Kubernetes shape). |
 | containers.server.tolerations | list | `[]` | Server pod tolerations. |
