@@ -5,13 +5,14 @@ This Helm chart deploys the AnsibleForms application and its MySQL database on K
 ## Features
 
 - Deploys AnsibleForms and MySQL with configurable images and resources
+- Runs the playbooks on an RTE next to the app, registered as the default runner
 - Handles all sensitive data (DB credentials, admin credentials, encryption secret) via Kubernetes Secrets
 - All application environment variables are configurable via `values.yaml`
 - Storage class and size for both server and MySQL are configurable
 - Supports both **dynamic provisioning** (StorageClass-based) and **pre-created static PVs**
 - Ingress is optional and highly customizable (hostname, TLS, annotations, etc.)
 - Service type (ClusterIP, LoadBalancer, NodePort) is configurable, with support for static LoadBalancer IPs
-- (Optional) Support for managing `forms.yaml`, `forms/*.yaml` definitions, and `custom.js` via ConfigMaps
+- (Optional) Support for managing `config.yaml`, the form files and `custom.js` via ConfigMaps
 
 Every value, its type, default and a one-line description: [VALUES.md](VALUES.md).
 
@@ -39,8 +40,8 @@ helm upgrade --install ansibleforms oci://ghcr.io/ansibleforms/charts/ansiblefor
 ```
 
 Pin the chart version in anything that runs unattended, for example
-`--version 6.5.5`, so a new release never lands on its own. The chart version is the
-AnsibleForms version it installs, so `--version "~6.5"` stays on AnsibleForms 6.5 and its fixes.
+`--version 7.0.0`, so a new release never lands on its own. The chart version is the
+AnsibleForms version it installs, so `--version "~7.0"` stays on AnsibleForms 7.0 and its fixes.
 
 The chart repository lives at `https://ansibleforms.com/helm-charts/`. It used to be served
 from `https://ansibleforms.github.io/ansibleforms-helm/` and later
@@ -116,7 +117,7 @@ storages:
 
 containers:
   server:
-    image: ghcr.io/ansibleforms/ansibleforms:6.5.2
+    image: ghcr.io/ansibleforms/ansibleforms:7.0.0
     resources:
       limits:
         cpu: "0.5"
@@ -244,9 +245,9 @@ If you do **not** need static PVs, simply leave `static.enabled: false` and use 
 
 ---
 
-### 4. Using ConfigMaps for `forms.yaml`, form definitions, and `custom.js` (optional)
+### 4. Using ConfigMaps for `config.yaml`, the form files, and `custom.js` (optional)
 
-AnsibleForms uses a main configuration file (`forms.yaml`) and can also load additional form definitions from a `forms/` directory inside the persistent folder. It also supports a `custom.js` file for client-side customization, typically mounted at `/app/dist/src/functions/custom.js` as described in the AnsibleForms FAQ.
+AnsibleForms 7 reads its base configuration (categories, roles and constants) from `config.yaml`, and the forms themselves only from the forms folder, `/app/dist/persistent/forms`, one or more forms per file. A `forms:` section inside `config.yaml` is an error in 7. It also supports a `custom.js` file with custom functions, loaded from `/app/dist/src/functions/custom.js`.
 
 This chart provides optional values to mount those files from ConfigMaps:
 
@@ -254,14 +255,14 @@ This chart provides optional values to mount those files from ConfigMaps:
 forms:
   configMap:
     enabled: true
-    name: ansibleforms-forms                # ConfigMap containing the main forms.yaml
-    key: forms.yaml                         # key in the ConfigMap
-    mountPath: /app/dist/persistent/forms.yaml
+    name: ansibleforms-config               # ConfigMap containing config.yaml
+    key: config.yaml                        # key in the ConfigMap
+    mountPath: /app/dist/persistent/config.yaml
 
   extraFormsConfigMap:
     enabled: true
-    name: ansibleforms-forms-defs           # ConfigMap containing multiple form YAMLs
-    mountPath: /app/dist/persistent/forms   # mounted as a directory
+    name: ansibleforms-forms-defs           # ConfigMap containing the form files
+    mountPath: /app/dist/persistent/forms   # mounted as the forms folder
 
   customJs:
     enabled: true
@@ -270,21 +271,23 @@ forms:
     mountPath: /app/dist/src/functions/custom.js
 ```
 
-When any of the `enabled` flags are `false` (the default), the chart behaves as before and does not mount the corresponding ConfigMap.
+When any of the `enabled` flags are `false` (the default), the chart does not mount the corresponding ConfigMap.
 
-#### 4.1 Example: main forms configuration (`forms.yaml`)
+A config file mounted from a ConfigMap is read-only, so the designer cannot save changes to it. Edit the ConfigMap instead, or keep the configuration in a git repository that AnsibleForms syncs.
 
-The following ConfigMap provides the main `forms.yaml` file, which defines categories, roles, and constants:
+#### 4.1 Example: base configuration (`config.yaml`)
+
+The following ConfigMap provides `config.yaml`, which defines categories, roles and constants:
 
 ```yaml
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: ansibleforms-forms
+  name: ansibleforms-config
   namespace: ansibleforms
 data:
-  forms.yaml: |
+  config.yaml: |
     categories:
       - name: Default
         icon: bars
@@ -293,8 +296,6 @@ data:
       - name: Maintenance
         icon: cogs
       - name: Internal
-        icon: cogs
-      - name: Vmware
         icon: cogs
     roles:
       - name: admin
@@ -309,15 +310,13 @@ data:
       - name: internal
         groups:
           - ldap/internal
-        users:
-          - ldap/FRoca
     constants:
       AF_PLAYBOOKS: /app/dist/persistent/playbooks
 ```
 
-With the `forms.configMap` values set as shown earlier, this `forms.yaml` will be mounted at `/app/dist/persistent/forms.yaml`, which is the default location used by AnsibleForms.
+With the `forms.configMap` values set as shown earlier, this file is mounted at `/app/dist/persistent/config.yaml`, the default location AnsibleForms reads it from.
 
-#### 4.2 Example: additional form definitions (`forms/*.yaml`)
+#### 4.2 Example: the form files (`forms/*.yaml`)
 
 You can keep each form definition in a separate YAML file within a second ConfigMap. Each key under `data:` becomes a file inside `/app/dist/persistent/forms/`:
 
@@ -460,6 +459,19 @@ you do not set `existingSecret`, the chart will happily create its own Secret
 under that name and overwrite yours on the next sync. It does at least refuse
 to write the placeholder passwords from `values.yaml` into it.
 
+### 6c. The database user
+
+`applications.mysql.user` is the user AnsibleForms connects with. Left empty, the chart
+reads it back from the release's Secret, so an upgrade keeps it: a release installed by chart
+6.x connects as root, and its MySQL data directory has no other user. A new install with the
+bundled MySQL gets `ansibleforms`, which MySQL creates with rights on the AnsibleForms schema
+only, and a database of your own gets root.
+
+Argo CD and Flux render with `helm template`, where there is no Secret to read back. With the
+bundled MySQL the chart then refuses an empty user rather than guess one the data directory
+may not have, so set it: `root` to keep a 6.x release as it is, `ansibleforms` on a new
+install. With `secrets.existingSecret`, give the `DB_USER` that Secret holds.
+
 ### 7. Using a database the chart does not manage
 
 Set `mysql.enabled: false` and no MySQL Deployment, Service, PVC or ConfigMap is
@@ -477,22 +489,13 @@ applications:
     password: ...   # or supply it through secrets.existingSecret
 ```
 
-**Create the schema first.** AnsibleForms migrates an existing schema forward
-but does not create one from nothing. The bundled MySQL gets it from the chart's
-init script, which your own server never sees, so apply
-[`files/schema.sql`](files/schema.sql) once before starting the application:
-
-```bash
-mysql -h your-db-host -u root -p < files/schema.sql
-```
-
-It creates the `AnsibleForms` database and its tables, creates nothing that is
-already there, and drops nothing, so re-running it is harmless. It grants no
-privileges either; give your AnsibleForms user access to that database yourself.
-
-Skip this and the symptom is confusing: the pod starts, passes its probes and
-serves the front page, because that page is static, while every query behind it
-fails with `Table 'AnsibleForms.jobs' doesn't exist`.
+**No schema to apply.** AnsibleForms 7 creates its schema when it finds the
+database empty, so a fresh server needs nothing beforehand. The user it connects
+with needs the rights to create tables there, and to create the `AnsibleForms`
+database too if it does not exist yet. On a database that already holds an
+AnsibleForms schema, from 6.x for example, it migrates that schema forward
+instead. Set `ALLOW_SCHEMA_CREATION: 0` under `applications.server.env` to stop
+it from ever creating a schema on its own.
 
 **Disabling MySQL on a release that already runs it deletes the PVC**, and with
 a reclaim policy of `Delete` the data goes with it. Take a dump first.
@@ -541,6 +544,110 @@ spec:
 
 Leave `HTTPS: 0` if you would rather have the ingress controller terminate TLS
 and talk plain HTTP inside the cluster, which is what most people want.
+
+### 9. Client addresses behind the ingress
+
+Behind the Ingress every connection reaches AnsibleForms from the ingress controller. Without
+being told so, the app takes the controller's address for every user: the audit trail names
+the controller, and the per-address sign-in limits, `LOGIN_MAX_FAILURES_PER_IP` and
+`AUTH_RATE_LIMIT`, count everybody as one client and hold back every user at once.
+
+So with `ingress.enabled` and the server Service a `ClusterIP` (the defaults), the chart sets
+`TRUST_PROXY=1`. The app then reads the client's address from the `X-Forwarded-For` entry the
+controller adds, which a client cannot choose. One hop is one controller; set it yourself
+under `applications.server.env` when that is not your setup:
+
+```yaml
+applications:
+  server:
+    env:
+      TRUST_PROXY: 2             # a load balancer that adds its own entry, then the controller
+      # TRUST_PROXY: 10.0.0.0/8  # or the proxies' addresses and ranges
+      # TRUST_PROXY: 0           # or off: the connection's address is recorded
+```
+
+With a `NodePort` or `LoadBalancer` Service, clients can reach the app without passing the
+controller and could send any `X-Forwarded-For` they like, so the chart sets nothing there.
+Name the controller's addresses in `TRUST_PROXY` yourself, and avoid `true`, which trusts any client.
+
+## Sessions across restarts
+
+AnsibleForms signs its sessions with `ACCESS_TOKEN_SECRET`. The chart generates one on the
+first install into the `<release>-keys` Secret and keeps it across upgrades, so a restarted
+pod no longer signs everybody out. To choose it yourself, set
+`applications.server.env.ACCESS_TOKEN_SECRET`, or take it from a Secret of your own with an
+`ACCESS_TOKEN_SECRET` entry in `containers.server.extraEnv`; the chart then generates none.
+Changing it ends every session.
+
+Generating it needs the cluster, to read back what was generated before. Argo CD and Flux
+render with `helm template`, where there is none, so the chart refuses to generate it there
+and says which value to set, as it does for `secrets.generate`.
+
+## Running playbooks: the RTE
+
+AnsibleForms 7 runs no playbook in the app: every playbook runs on an RTE (runtime
+environment), `ghcr.io/ansibleforms/ansibleforms-rte-full`. The chart runs one as a second
+container in the server pod. It shares the app's volume, so it sees the same playbooks,
+repositories, uploads and SSH key, and the app reaches it on `127.0.0.1:8000`. No Service
+publishes that port, but it listens on the pod's address like any container, so other pods
+can reach it there: its jobs API needs the token, `/live` and `/ready` answer anybody, and
+`/metrics` answers only with `METRICS_TOKEN`. `networkPolicy.server` keeps other pods to the
+app's port.
+
+The chart also registers it for you. A config seed creates a runner named `rte`, type RTE,
+ticked as the default, so a playbook form runs on it without any setup. The seed re-applies
+it on every start, which is why the runner is read-only under Connections > Runners.
+
+```yaml
+applications:
+  rte:
+    token: ""                 # empty: generated once into <release>-keys and kept
+    env:
+      ANSIBLE_PATH: /app/dist/persistent/playbooks
+containers:
+  rte:
+    enabled: true
+    image: ghcr.io/ansibleforms/ansibleforms-rte-full:7.0.0
+    runnerName: rte
+```
+
+The RTE image holds what your playbooks need: ansible, the Python libraries and the
+collections. When yours need more, or less, build your own on one of the published layers,
+`ansibleforms-rte-full` or the smaller `ansibleforms-rte-core`, adding
+`RUN ansible-galaxy collection install ...` or `RUN pip install ...`. The app's
+[examples/rte](https://github.com/ansibleforms/ansibleforms/tree/main/examples/rte) has Dockerfiles to start from. Point `containers.rte.image` at it. Keep its release on the app's, or on one with the same
+RTE contract: Test connection under Connections > Runners shows both.
+
+**The token.** The app sends it with every call and the RTE runs no job without it. Left
+empty, the chart generates one on the first install and keeps it across upgrades. Argo CD and
+Flux render with `helm template`, where the chart cannot read it back, and a token generated
+on every sync would let the two containers drift apart: after one of them restarts, every
+job is refused with a 401. So there the chart refuses to generate it: set
+`applications.rte.token`, or point `containers.rte.existingTokenSecret` at a Secret you manage.
+
+The RTE is told that same address as `RTE_URL`, so it recognises the seeded runner as its
+own. With `containers.rte.seedRunner: false` it adds itself instead: one runner named
+`127.0.0.1` (`127.0.0.1-<port>` when the port is not 8000) on `http://127.0.0.1:<port>`, the
+default unless another RTE runner already is, and the same row after every restart.
+`RTE_REGISTER: "0"` under `applications.rte.env` turns that off; add the runner by hand then.
+
+**A config seed of your own.** The app reads one seed, from `CONFIG_SEED_PATH`. When you set
+it, the chart leaves the seed to you and passes the token to the app as `RTE_TOKEN`. The RTE
+then adds itself as above; to declare the runner yourself, with a name of your choice, add it
+to your seed:
+
+```yaml
+runners:
+  items:
+    - name: rte
+      type: rte
+      uri: http://127.0.0.1:8000
+      token: ${RTE_TOKEN}
+      is_default: true
+```
+
+**Without the RTE.** `containers.rte.enabled: false` leaves it out, for an RTE you run
+elsewhere or for AWX, AAP or Ascender only. Add those runners under Connections > Runners.
 
 ## Tuning the bundled MySQL
 
@@ -733,7 +840,7 @@ rollOnChange:
 from the cluster, and that returns nothing during `helm template`. Anything that
 renders first and applies afterwards, Argo CD and Flux included, would get a
 checksum that does not match the one an install produces. Turn it on if you run
-Helm directly and want a `forms.yaml` change to restart the server on the next
+Helm directly and want a `config.yaml` change to restart the server on the next
 upgrade.
 
 ## Checking an install
@@ -852,7 +959,7 @@ containers:
     securityContext: null
     initContainers:
       - name: prepare-persistent-volume
-        image: ghcr.io/ansibleforms/ansibleforms:6.5.2
+        image: ghcr.io/ansibleforms/ansibleforms:7.0.0
         command: ["sh", "-c", "chown -R 1000:1000 /app/dist/persistent"]
         securityContext:
           runAsUser: 0
@@ -885,7 +992,7 @@ that combination rather than let you find out the hard way.
 - All resource limits, storage, and service types are configurable.
 - Ingress can be enabled/disabled and fully customized.
 - Storage can be backed by dynamic StorageClasses or static PVs as needed.
-- Forms configuration (`forms.yaml` and additional `forms/*.yaml`) and `custom.js` can be managed via ConfigMaps as shown above.
+- The configuration (`config.yaml` and the form files in `forms/`) and `custom.js` can be managed via ConfigMaps as shown above.
 
 ### Extras 1. Define extra volumes (root level) that you want to mount to containers.
 ```
@@ -919,7 +1026,7 @@ containers:
   server:
     initContainers:
       - name: prepare-persistent-volume
-        image: ghcr.io/ansibleforms/ansibleforms:6.5.2
+        image: ghcr.io/ansibleforms/ansibleforms:7.0.0
         imagePullPolicy: IfNotPresent
         # This command changes the ownership of the specified directory.
         command: ["sh", "-c", "chown -R 1000:1000 /app/dist/persistent"]
@@ -961,12 +1068,12 @@ applications:
 containers:
   server:
     liveness:
-      path: /
+      path: /api/v2/live      # relative to BASE_URL, which the chart puts in front
       initialDelaySeconds: 15
       periodSeconds: 15
       timeoutSeconds: 15
     readiness:
-      path: /
+      path: /api/v2/ready     # 503 while the database or the schema is not there
       initialDelaySeconds: 15
       periodSeconds: 15
       timeoutSeconds: 15

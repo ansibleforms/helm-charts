@@ -5,13 +5,15 @@
 # To list the chart on https://artifacthub.io:
 #   1. Sign in there and add a Helm repository with the URL
 #      https://ansibleforms.com/helm-charts/
-#   2. Copy the repository ID Artifact Hub shows into repositoryID below, and list the
-#      owners by the email of their Artifact Hub account. On the next release Artifact Hub
-#      reads them back, marks the publisher as verified and lets the owners claim it.
+#   2. Copy the repository ID Artifact Hub shows into repositoryID below. Artifact Hub
+#      reads it back on its next pass and marks the publisher as verified. Owners, listed
+#      by the email of their Artifact Hub account, are only needed to claim the repository
+#      from another account.
 #
 # Reference: https://artifacthub.io/docs/topics/repositories/helm-charts/
 
 repositoryID: 246dab19-d947-4d61-b97b-362580273a9b
+
 # owners:
 #   - name: <name>
 #     email: <email of the Artifact Hub account>

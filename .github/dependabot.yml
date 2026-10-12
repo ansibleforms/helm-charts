@@ -1,17 +1,27 @@
 version: 2
 
 # Keeps the workflow actions on their latest version, majors included : CI lints the chart,
-# installs it on three Kubernetes versions and upgrades a live release on every pull request,
+# installs it on a kind cluster and upgrades a live release on every pull request,
 # so a breaking action fails there before it merges. Updates are never grouped : every
 # action gets its own pull request, so each one can be reviewed and reverted on its own.
 #
-# The images in values.yaml are not watched. CI refuses a change to values.yaml that does
-# not move the chart version, which Dependabot cannot do, so every image pull request would
+# The images in values.yaml are not watched. CI refuses a change to values.yaml without an
+# Unreleased changelog entry, which Dependabot cannot write, so every image pull request would
 # fail by design. Image bumps go out with a chart release instead.
 
 updates:
   - package-ecosystem: github-actions
     directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+
+
+  # The Kubernetes (kind node image), kubeconform and Calico versions CI tests against,
+  # pinned as FROM lines in test/versions/Dockerfile.
+  - package-ecosystem: docker
+    directory: /test/versions
     schedule:
       interval: weekly
     commit-message:

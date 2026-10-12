@@ -68,6 +68,45 @@ About ENCRYPTION_SECRET
   the key stored credentials are encrypted with, and changing it does not fail,
   it just quietly turns them into rubbish. Take a backup and re-enter them.
 {{ end }}
+{{- if eq (include "ansibleforms.rte.enabled" .) "true" }}
+{{- $rteRegister := toString (dig "rte" "env" "RTE_REGISTER" "" (.Values.applications | default dict)) }}
+{{- range $e := (dig "rte" "extraEnv" (list) (.Values.containers | default dict)) }}
+{{- if eq (toString $e.name) "RTE_REGISTER" }}{{ $rteRegister = toString $e.value }}{{ end }}
+{{- end }}
+Running playbooks
+
+  Playbooks run on the RTE in the server pod ({{ dig "rte" "image" "" (.Values.containers | default dict) }}).
+{{- if eq (include "ansibleforms.rte.seedEnabled" .) "true" }}
+  The chart registered it as the default runner, "{{ dig "rte" "runnerName" "rte" (.Values.containers | default dict) }}", under Connections > Runners.
+{{- else if eq $rteRegister "0" }}
+  RTE_REGISTER is 0, so it does not add itself as a runner. Add it under
+  Connections > Runners: type RTE, uri {{ include "ansibleforms.rte.url" . }}, tick Default,
+  and the token from:
+
+    kubectl -n {{ .Release.Namespace }} get secret {{ include "ansibleforms.rte.tokenSecretName" . }} -o jsonpath='{.data.{{ include "ansibleforms.rte.tokenSecretKey" . }}}' | base64 -d
+{{- else }}
+  It adds itself under Connections > Runners as "{{ include "ansibleforms.rte.selfName" . }}" ({{ include "ansibleforms.rte.url" . }}),
+  the default unless another RTE runner already is, and keeps that one row across restarts.
+{{- if eq (include "ansibleforms.rte.userSeed" .) "true" }}
+  CONFIG_SEED_PATH points at a seed of your own: to declare the runner there
+  instead, with a name of your choice, add it to that seed:
+
+    runners:
+      items:
+        - name: rte
+          type: rte
+          uri: {{ include "ansibleforms.rte.url" . }}
+          token: ${RTE_TOKEN}
+          is_default: true
+{{- end }}
+{{- end }}
+{{- else }}
+Running playbooks
+
+  containers.rte.enabled is false, so no RTE runs with the app. Playbook forms need a
+  runner of type RTE added under Connections > Runners.
+{{- end }}
+
 Checking it works
 
   helm test {{ .Release.Name }} --namespace {{ .Release.Namespace }}
@@ -75,8 +114,7 @@ Checking it works
 Database
 
   mysql.enabled is false, so this release talks to {{ include "ansibleforms.mysql.host" . }} and
-  the chart deployed no database. AnsibleForms migrates an existing schema
-  forward but does not create one, so if you have not already, apply
-  files/schema.sql to that server once. Until you do, the pages load and every
-  query behind them fails.
+  the chart deployed no database. AnsibleForms creates its schema there on the
+  first start, as long as the database is empty and the user may create tables
+  (and the AnsibleForms database, if it does not exist yet).
 {{- end }}

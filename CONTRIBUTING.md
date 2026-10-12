@@ -54,7 +54,7 @@ that a few assertions that rendering alone would not make:
   is immutable
 - the MySQL probes exist and none of them carries a credential
 - the chart version moved, if anything under `Chart.yaml`, `values.yaml`,
-  `templates/` or `files/` of `charts/ansibleforms` did
+  `templates/` or `files/` (if it has one) of `charts/ansibleforms` did
 - the two security context combinations that cannot work are still refused, and
   the message still names the value to change
 
@@ -144,6 +144,12 @@ version's changelog entry. It merges itself once **CI passed** is green, and the
 release workflow publishes the chart. A new major version opens an issue instead,
 because moving the chart across a major takes real work. To catch up on a release
 by hand: Actions → *Follow app release* → Run workflow, with the version.
+
+## AnsibleForms 6
+
+The 6.x charts, 6.0.0 to 6.5.5, are final: they stay published and installable, and no
+further 6.x chart is released. Their source is in the history of `main`, at the `v6.x.y`
+tags. Users stay on 6 by pinning the chart: `--version "~6"`.
 
 ## Repository settings this depends on
 

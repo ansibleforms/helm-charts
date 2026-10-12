@@ -35,7 +35,17 @@
 */}}
 {{- $port := include "ansibleforms.server.port" . }}
 {{- $scheme := include "ansibleforms.server.scheme" . }}
-{{- $sensitive := dict "ENCRYPTION_SECRET" true "ADMIN_USERNAME" true "ADMIN_PASSWORD" true }}
+{{- $sensitive := dict "ENCRYPTION_SECRET" true "ADMIN_USERNAME" true "ADMIN_PASSWORD" true "ACCESS_TOKEN_SECRET" true }}
+{{- $rteOn := eq (include "ansibleforms.rte.enabled" .) "true" }}
+{{- $seedOn := eq (include "ansibleforms.rte.seedEnabled" .) "true" }}
+{{- $rte := ($containers.rte | default dict) }}
+{{- $rteResources := ($rte.resources | default dict) }}
+{{- $rteLimits := ($rteResources.limits | default dict) }}
+{{- $rteRequests := ($rteResources.requests | default dict) }}
+{{- $rteStartup := ($rte.startup | default dict) }}
+{{- $rteLiveness := ($rte.liveness | default dict) }}
+{{- $rtePort := include "ansibleforms.rte.port" . }}
+{{- $basePath := include "ansibleforms.server.basePath" . }}
 
 {{- include "ansibleforms.assertNoRootInitContainer" (dict "component" $server "key" "server") }}
 {{- include "ansibleforms.assertSecurityContextsAgree" (dict "component" $server "key" "server") }}
@@ -51,7 +61,8 @@ metadata:
     {{- . | nindent 4 }}
   {{- end }}
 spec:
-  replicas: {{ $server.replicas | default 1 }}
+  {{- /* hasKey, not default: 0 is a value here, and default would turn it into 1 */}}
+  replicas: {{ if hasKey $server "replicas" }}{{ $server.replicas | int }}{{ else }}1{{ end }}
   {{- /* The selector is immutable on an existing Deployment, leave it alone */}}
   selector:
     matchLabels:
@@ -72,6 +83,10 @@ spec:
              checksums the chart works out for itself. */}}
       {{- $checksums := fromYaml (include "ansibleforms.ownedConfigChecksums" (dict "root" $ "withForms" true)) }}
       {{- $podAnn := merge (dict) ($server.podAnnotations | default dict) (.Values.commonAnnotations | default dict) $checksums }}
+      {{- /* Two containers now: kubectl logs and exec land on the app unless told otherwise */}}
+      {{- if $rteOn }}
+      {{- $podAnn = merge $podAnn (dict "kubectl.kubernetes.io/default-container" "server") }}
+      {{- end }}
       {{- with $podAnn }}
       annotations:
         {{- toYaml . | nindent 8 }}
@@ -148,6 +163,12 @@ spec:
             {{- end }}
             {{- end }}
 
+            {{- /* The client's address behind the Ingress, see the helper */}}
+            {{- if eq (include "ansibleforms.server.trustProxyDefault" .) "true" }}
+            - name: TRUST_PROXY
+              value: "1"
+            {{- end }}
+
             {{- /*
               The bundled MySQL Service is named after the release now, so the
               default cannot be the literal "mysql" any more.
@@ -187,6 +208,32 @@ spec:
                 secretKeyRef:
                   name: {{ $secretName }}
                   key: ADMIN_PASSWORD
+
+            {{- /* Signs the sessions, so they survive a restart. From extraEnv when it sets it. */}}
+            {{- if eq (include "ansibleforms.sessionKeyOwned" .) "true" }}
+            - name: ACCESS_TOKEN_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ansibleforms.keysSecretName" . }}
+                  key: ACCESS_TOKEN_SECRET
+            {{- end }}
+
+            {{- if $rteOn }}
+            {{- /*
+              Not read by the app itself: it is there for the config seed, which writes the
+              runner's token as ${RTE_TOKEN}. The chart's seed does, and so can yours.
+            */}}
+            - name: RTE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ansibleforms.rte.tokenSecretName" . }}
+                  key: {{ include "ansibleforms.rte.tokenSecretKey" . }}
+            {{- end }}
+
+            {{- if $seedOn }}
+            - name: CONFIG_SEED_PATH
+              value: /etc/ansibleforms/seed/seed.yaml
+            {{- end }}
 
             {{- /*
               Anything applications.server.env cannot express: values read from
@@ -239,11 +286,15 @@ spec:
             The startup probe holds the liveness probe back while the database
             migrations run on first boot. Without it a slow start looks like a
             hung process and the kubelet restarts the pod in a loop.
+
+            The app answers /api/v2/live while the process runs and /api/v2/ready once
+            the database answers and its schema is complete, both without a login. They
+            sit under BASE_URL like everything else, so the paths are prefixed with it.
           */}}
           {{- if or (not (hasKey $startup "enabled")) $startup.enabled }}
           startupProbe:
             httpGet:
-              path: {{ $startup.path | default $readiness.path | default "/" }}
+              path: {{ printf "%s%s" $basePath ($startup.path | default $readiness.path | default "/api/v2/ready") }}
               port: http
               scheme: {{ $scheme }}
             initialDelaySeconds: {{ $startup.initialDelaySeconds | default 10 }}
@@ -254,7 +305,7 @@ spec:
 
           livenessProbe:
             httpGet:
-              path: {{ $liveness.path | default "/" }}
+              path: {{ printf "%s%s" $basePath ($liveness.path | default "/api/v2/live") }}
               port: http
               scheme: {{ $scheme }}
             initialDelaySeconds: {{ $liveness.initialDelaySeconds | default 15 }}
@@ -264,7 +315,7 @@ spec:
 
           readinessProbe:
             httpGet:
-              path: {{ $readiness.path | default "/" }}
+              path: {{ printf "%s%s" $basePath ($readiness.path | default "/api/v2/ready") }}
               port: http
               scheme: {{ $scheme }}
             initialDelaySeconds: {{ $readiness.initialDelaySeconds | default 15 }}
@@ -277,6 +328,11 @@ spec:
               name: server-persistent-storage
             - mountPath: /home/node/.ssh
               name: server-persistent-storage
+            {{- if $seedOn }}
+            - name: rte-seed
+              mountPath: /etc/ansibleforms/seed
+              readOnly: true
+            {{- end }}
             {{- with .Values.forms }}
               {{- with .configMap }}
                 {{- if .enabled }}
@@ -306,12 +362,150 @@ spec:
 {{ toYaml $server.extraVolumeMounts | nindent 12 }}
             {{- end }}
 
+        {{- if $rteOn }}
+        {{- /*
+          The RTE runs the playbooks. Same pod as the app, so it sees the same volume
+          (playbooks, repositories, uploads, the SSH key) and the app reaches it on
+          127.0.0.1. It reads the job from the database, so it gets the app's database
+          settings and ENCRYPTION_SECRET. Its jobs API answers only calls carrying
+          RTE_TOKEN; /live and /ready need none, /metrics needs METRICS_TOKEN.
+        */}}
+        - name: rte
+          image: {{ $rte.image | required "containers.rte.image is required while containers.rte.enabled is true" }}
+          imagePullPolicy: {{ $rte.imagePullPolicy | default "IfNotPresent" }}
+
+          ports:
+            - name: rte
+              containerPort: {{ $rtePort }}
+              protocol: TCP
+
+          env:
+            {{- range $key, $value := ((($app.rte | default dict).env) | default dict) }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+            {{- end }}
+
+            {{- /* After the user's env, so these cannot be overridden by accident there */}}
+            - name: PORT
+              value: {{ $rtePort | quote }}
+
+            {{- /* Only the app pod talks to it, over 127.0.0.1: no certificate to manage */}}
+            - name: HTTPS
+              value: "0"
+
+            {{- /*
+              The address it registers itself under (Connections > Runners): the one the seed
+              declares, so the seeded runner and the RTE are one row. Without the seed it is a
+              stable row of its own, instead of a new one on the pod IP at every start.
+            */}}
+            - name: RTE_URL
+              value: {{ include "ansibleforms.rte.url" . | quote }}
+
+            - name: DB_HOST
+              value: {{ include "ansibleforms.mysql.host" . | quote }}
+
+            - name: DB_PORT
+              value: {{ $appMysql.port | default "3306" | quote }}
+
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: DB_USER
+
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: DB_PASSWORD
+
+            - name: ENCRYPTION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: ENCRYPTION_SECRET
+
+            - name: RTE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ansibleforms.rte.tokenSecretName" . }}
+                  key: {{ include "ansibleforms.rte.tokenSecretKey" . }}
+
+            {{- with $rte.extraEnv }}
+{{ toYaml . | nindent 12 }}
+            {{- end }}
+
+          {{- with $rte.extraEnvFrom }}
+          envFrom:
+{{ toYaml . | nindent 12 }}
+          {{- end }}
+
+          resources:
+            limits:
+              cpu: {{ $rteLimits.cpu | default "2" }}
+              memory: {{ $rteLimits.memory | default "2048Mi" }}
+            requests:
+              cpu: {{ $rteRequests.cpu | default "250m" }}
+              memory: {{ $rteRequests.memory | default "256Mi" }}
+
+          {{- /* The app's user: the files on the shared volume belong to it */}}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: {{ $server.runAsUser | default 1000 }}
+            runAsGroup: {{ $server.runAsGroup | default 1000 }}
+            capabilities:
+              drop:
+                - ALL
+
+          {{- /*
+            /ready and /live need no token (the jobs API does). Ready means the database
+            answers and the app's schema is there, which on a first install comes after the
+            app has created it: the startup budget matches the app's. Plain HTTP, since the
+            chart sets HTTPS=0 on it above.
+          */}}
+          startupProbe:
+            httpGet:
+              path: /ready
+              port: rte
+              scheme: HTTP
+            initialDelaySeconds: {{ $rteStartup.initialDelaySeconds | default 5 }}
+            periodSeconds: {{ $rteStartup.periodSeconds | default 5 }}
+            timeoutSeconds: {{ $rteStartup.timeoutSeconds | default 5 }}
+            failureThreshold: {{ $rteStartup.failureThreshold | default 60 }}
+
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: rte
+              scheme: HTTP
+            periodSeconds: {{ $rteLiveness.periodSeconds | default 30 }}
+            timeoutSeconds: {{ $rteLiveness.timeoutSeconds | default 5 }}
+            failureThreshold: {{ $rteLiveness.failureThreshold | default 3 }}
+
+          volumeMounts:
+            - mountPath: /app/dist/persistent
+              name: server-persistent-storage
+            - mountPath: /home/node/.ssh
+              name: server-persistent-storage
+            {{- with $rte.extraVolumeMounts }}
+{{ toYaml . | nindent 12 }}
+            {{- end }}
+        {{- end }}
+
       restartPolicy: Always
 
       volumes:
         - name: server-persistent-storage
           persistentVolumeClaim:
             claimName: {{ include "ansibleforms.server.pvcName" . }}
+
+        {{- if $seedOn }}
+        - name: rte-seed
+          configMap:
+            name: {{ include "ansibleforms.rte.seedName" . }}
+        {{- end }}
 
         {{- with .Values.forms }}
           {{- with .configMap }}

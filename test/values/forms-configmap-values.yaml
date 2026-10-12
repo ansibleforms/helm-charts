@@ -1,5 +1,5 @@
 ---
-# Forms, extra forms and custom javascript supplied as external ConfigMaps.
+# config.yaml, the form files and custom javascript supplied as external ConfigMaps.
 # Render only, since the referenced ConfigMaps are managed outside the chart.
 applications:
   mysql:
@@ -11,6 +11,11 @@ applications:
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: ci-not-a-real-password
       ENCRYPTION_SECRET: ci-not-a-real-secret
+      # the session key and the RTE token: lint and template have no cluster to read
+      # them back from, and the chart refuses to generate them there
+      ACCESS_TOKEN_SECRET: ci-not-a-real-session-key
+  rte:
+    token: ci-not-a-real-rte-token
 
 ingress:
   enabled: true
@@ -19,9 +24,9 @@ ingress:
 forms:
   configMap:
     enabled: true
-    key: forms.yaml
-    mountPath: /app/dist/persistent/forms.yaml
-    name: ansibleforms-forms
+    key: config.yaml
+    mountPath: /app/dist/persistent/config.yaml
+    name: ansibleforms-config
   customJs:
     enabled: true
     key: custom.js

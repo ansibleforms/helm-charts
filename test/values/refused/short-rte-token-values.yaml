@@ -1,0 +1,12 @@
+---
+# An RTE token under 16 characters. The RTE refuses to start with one, which would show up
+# as a crash-looping container in an otherwise healthy pod, so the chart refuses it first.
+applications:
+  mysql:
+    password: ci-not-a-real-password
+  server:
+    env:
+      ADMIN_PASSWORD: ci-not-a-real-password
+      ENCRYPTION_SECRET: ci-not-a-real-secret
+  rte:
+    token: too-short

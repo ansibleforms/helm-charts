@@ -4,13 +4,22 @@
 applications:
   mysql:
     password: ci-not-a-real-password
-    user: root
+    # what a new install takes when the user is left empty and the chart can read the
+    # cluster : "ansibleforms", which the bundled MySQL creates with rights on the
+    # AnsibleForms schema only (no-ingress-values.yaml keeps covering root). Given here
+    # because lint and template have no cluster, and refuse an empty user there.
+    user: ansibleforms
   server:
     env:
       HTTPS: 0
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: ci-not-a-real-password
       ENCRYPTION_SECRET: ci-not-a-real-secret
+      # the session key and the RTE token: lint and template have no cluster to read
+      # them back from, and the chart refuses to generate them there
+      ACCESS_TOKEN_SECRET: ci-not-a-real-session-key
+  rte:
+    token: ci-not-a-real-rte-token
 
 containers:
   mysql:

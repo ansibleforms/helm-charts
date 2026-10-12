@@ -168,6 +168,7 @@ jobs:
           values = yaml.safe_load(open("values.yaml"))
           app = str(chart["appVersion"])
           image = values["containers"]["server"]["image"]
+          rte = values["containers"]["rte"]["image"]
           mysql = values["containers"]["mysql"]["image"]
           test_image = values["tests"]["image"]
 
@@ -176,6 +177,10 @@ jobs:
               failures.append(f"containers.server.image {image!r} has no tag at all")
           elif image.rsplit(":", 1)[1] != app:
               failures.append(f"appVersion is {app} but containers.server.image is {image}")
+
+          # The RTE is released with the app and tagged alike; the two move together.
+          if ":" not in rte or rte.rsplit(":", 1)[1] != app:
+              failures.append(f"appVersion is {app} but containers.rte.image is {rte}")
 
           # The comment in values.yaml says this one is pinned deliberately,
           # because MySQL does not support downgrades and a floating tag turns a
@@ -187,14 +192,14 @@ jobs:
           # exactly what values.yaml deploys, and nothing else.
           listed = sorted(i["image"] for i in yaml.safe_load(
               chart.get("annotations", {}).get("artifacthub.io/images", "[]")) or [])
-          deployed = sorted([image, mysql, test_image])
+          deployed = sorted([image, rte, mysql, test_image])
           if listed != deployed:
               failures.append(f"artifacthub.io/images lists {listed} but values.yaml deploys {deployed}")
 
           if failures:
               print("\n".join(failures))
               sys.exit("::error::The chart's own image references disagree with themselves.")
-          print(f"appVersion {app} matches {image}, and {mysql} is pinned.")
+          print(f"appVersion {app} matches {image} and {rte}, and {mysql} is pinned.")
           PY
 
       - name: helm lint
@@ -443,6 +448,14 @@ jobs:
           if base.get("server checksum/secret") != cnf.get("server checksum/secret"):
               failures.append("the secret checksum moved when only my.cnf changed")
 
+          for setting in ("applications.rte.token=a-token-of-sixteen-chars",
+                          "applications.server.env.ACCESS_TOKEN_SECRET=another-session-key"):
+              key = sums("--set", setting)
+              if base.get("server checksum/keys") == key.get("server checksum/keys"):
+                  failures.append(f"the keys checksum did not move for {setting}")
+              if base.get("server checksum/secret") != key.get("server checksum/secret"):
+                  failures.append(f"the secret checksum moved for {setting}")
+
           if sums("--set", "rollOnChange.enabled=false"):
               failures.append("rollOnChange.enabled=false still wrote checksums")
 
@@ -624,12 +637,9 @@ jobs:
             fi
             sleep 5
           done
-          # A database the chart does not manage never sees the init script, and
-          # AnsibleForms migrates an existing schema forward rather than creating
-          # one, so the schema goes in first. This is exactly what the README
-          # tells operators to do, so the test does it the same way.
-          kubectl -n external-db exec -i deployment/external-mysql -- \
-            sh -c 'mysql -h 127.0.0.1 --protocol=TCP -uroot -p"$MYSQL_ROOT_PASSWORD"' < files/schema.sql
+          # Nothing goes into the database first: AnsibleForms 7 creates its schema
+          # when it finds the database empty, which is what the README promises an
+          # operator with their own server.
           helm install external-db . \
             --namespace external-db \
             --values ../../test/values/external-db-values.yaml \
@@ -647,6 +657,11 @@ jobs:
           # Ready is not enough here: the home page is static, so the pod comes
           # up and answers even when every query underneath is failing. Look at
           # what the application actually said instead.
+          if ! kubectl -n external-db logs deployment/external-db-server -c server | grep -q "creating the schema"; then
+            echo "::error::AnsibleForms did not create its schema on the empty external database."
+            kubectl -n external-db logs deployment/external-db-server -c server --tail=60
+            exit 1
+          fi
           if kubectl -n external-db logs deployment/external-db-server -c server | grep -q "doesn't exist"; then
             echo "::error::The server is up but its tables are missing."
             kubectl -n external-db logs deployment/external-db-server -c server | grep "doesn't exist" | head -5
@@ -696,6 +711,31 @@ jobs:
           echo "The two releases are fully independent."
           helm uninstall blue green --namespace side-by-side
 
+      # AnsibleForms 7 runs no playbook itself: the RTE in the server pod does. A pod that
+      # comes up ready proves nothing about that, so launch a playbook form through the API
+      # and wait for the RTE's output to come back.
+      - name: A playbook runs on the RTE
+        run: |
+          set -euo pipefail
+          kubectl create namespace rte
+          helm install rte . \
+            --namespace rte \
+            --values ci/no-ingress-values.yaml \
+            --wait --timeout 12m
+          pod="$(kubectl -n rte get pod -l app.kubernetes.io/component=server -o jsonpath='{.items[0].metadata.name}')"
+          kubectl -n rte cp ../../test/e2e/rte-playbook.mjs "$pod:/tmp/rte-playbook.mjs" -c server
+          kubectl -n rte exec "$pod" -c server -- node /tmp/rte-playbook.mjs || {
+            kubectl -n rte logs "$pod" -c rte --tail=60
+            exit 1
+          }
+          # The sessions are signed with the chart's ACCESS_TOKEN_SECRET, not a key the app
+          # made up at start, so a restart signs nobody out.
+          if kubectl -n rte logs "$pod" -c server | grep -q "ACCESS_TOKEN_SECRET is not set"; then
+            echo "::error::The app runs without ACCESS_TOKEN_SECRET: every restart signs everybody out."
+            exit 1
+          fi
+          helm uninstall rte --namespace rte
+
       # Generation only works where the chart can read the cluster, so it cannot
       # be covered by rendering. What matters is that the value it invents is
       # the right length and, above all, that it never changes afterwards:
@@ -710,6 +750,9 @@ jobs:
             --set applications.mysql.password=null \
             --set applications.server.env.ADMIN_PASSWORD=null \
             --set applications.server.env.ENCRYPTION_SECRET=null \
+            --set applications.mysql.user=null \
+            --set applications.server.env.ACCESS_TOKEN_SECRET=null \
+            --set applications.rte.token=null \
             --set secrets.generate=true --wait --timeout 12m
 
           read_key() {
@@ -725,6 +768,18 @@ jobs:
             echo "::error::Generated ENCRYPTION_SECRET is ${#enc} characters, not 32."; exit 1; }
           [ -n "$(read_key DB_PASSWORD)" ] && [ -n "$(read_key ADMIN_PASSWORD)" ] || {
             echo "::error::A generated credential came out empty."; exit 1; }
+          # No user given and a cluster to read: a new install connects as "ansibleforms"
+          [ "$(read_key DB_USER)" = "ansibleforms" ] || {
+            echo "::error::An empty applications.mysql.user gave $(read_key DB_USER), not ansibleforms."; exit 1; }
+
+          # The keys the chart generates on its own, into <release>-keys, likewise
+          read_keys() {
+            kubectl -n generated get secret generated-keys -o jsonpath="{.data.$1}" | base64 -d
+          }
+          session="$(read_keys ACCESS_TOKEN_SECRET)"
+          token="$(read_keys RTE_TOKEN)"
+          [ "${#session}" = "64" ] && [ "${#token}" = "32" ] || {
+            echo "::error::Generated ACCESS_TOKEN_SECRET is ${#session} and RTE_TOKEN ${#token} characters, not 64 and 32."; exit 1; }
 
           before="$enc"
           pod_before="$(kubectl -n generated get pods -o name | sort | tr '\n' ' ')"
@@ -734,11 +789,18 @@ jobs:
               --set applications.mysql.password=null \
               --set applications.server.env.ADMIN_PASSWORD=null \
               --set applications.server.env.ENCRYPTION_SECRET=null \
+              --set applications.mysql.user=null \
+              --set applications.server.env.ACCESS_TOKEN_SECRET=null \
+              --set applications.rte.token=null \
               --set secrets.generate=true --wait --timeout 12m >/dev/null
           done
           [ "$(read_key ENCRYPTION_SECRET)" = "$before" ] || {
             echo "::error::ENCRYPTION_SECRET changed across an upgrade. Everything it encrypted is now unreadable."
             exit 1; }
+          [ "$(read_key DB_USER)" = "ansibleforms" ] || {
+            echo "::error::The upgrades did not keep the database user the Secret held."; exit 1; }
+          [ "$(read_keys ACCESS_TOKEN_SECRET)" = "$session" ] && [ "$(read_keys RTE_TOKEN)" = "$token" ] || {
+            echo "::error::A generated key moved across an upgrade: the app and the RTE would drift apart."; exit 1; }
           [ "$(kubectl -n generated get pods -o name | sort | tr '\n' ' ')" = "$pod_before" ] || {
             echo "::error::Generation recycled the pods on an upgrade that changed nothing."; exit 1; }
           echo "Stable across two upgrades, and nothing was recycled."
@@ -755,6 +817,9 @@ jobs:
             --set applications.mysql.password=null \
             --set applications.server.env.ADMIN_PASSWORD=null \
             --set applications.server.env.ENCRYPTION_SECRET=null \
+            --set applications.mysql.user=null \
+            --set applications.server.env.ACCESS_TOKEN_SECRET=null \
+            --set applications.rte.token=null \
             --set secrets.generate=true --wait --timeout 12m
           [ "$(read_key ENCRYPTION_SECRET)" = "$before" ] || {
             echo "::error::A reinstall generated a different key."; exit 1; }

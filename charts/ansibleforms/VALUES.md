@@ -14,10 +14,13 @@ values.yaml itself and in the [README](README.md).
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | applications.mysql.password | string | `"<ENTER_PASSWORD_HERE>"` | Database password. Leave out with secrets.existingSecret or secrets.generate. |
-| applications.mysql.user | string | `"root"` | Database user. |
-| applications.server.env | object | `{"ADMIN_PASSWORD":"<ENTER_PASSWORD_HERE>","ADMIN_USERNAME":"admin","ENCRYPTION_SECRET":"<ENTER_SECRET_HERE>","HTTPS":0}` | Environment variables for AnsibleForms. Any application setting can be added here. |
+| applications.mysql.user | string | `""` | Database user. Empty keeps the user the Secret holds, or "ansibleforms" on a new install with the bundled MySQL. Required under helm template, Argo CD or Flux. |
+| applications.rte.env | object | `{}` | Environment variables for the RTE (ANSIBLE_PATH, PROCESS_MAX_BUFFER, NODE_EXTRA_CA_CERTS and so on). |
+| applications.rte.token | string | `""` | RTE token, 16 characters or more. Empty generates one, which needs a cluster to read (not under helm template, Argo CD or Flux). Ignored with containers.rte.existingTokenSecret. |
+| applications.server.env | object | `{"ADMIN_PASSWORD":"<ENTER_PASSWORD_HERE>","ADMIN_USERNAME":"admin","ALLOW_ENV_EDIT":0,"ENCRYPTION_SECRET":"<ENTER_SECRET_HERE>","HTTPS":0}` | Environment variables for AnsibleForms. Any application setting can be added here. |
 | applications.server.env.ADMIN_PASSWORD | string | `"<ENTER_PASSWORD_HERE>"` | Password of the local admin user created on first start. |
 | applications.server.env.ADMIN_USERNAME | string | `"admin"` | Name of the local admin user created on first start. |
+| applications.server.env.ALLOW_ENV_EDIT | int | `0` | 0 makes the settings pages read-only for environment variables, so these values stay the only source. |
 | applications.server.env.ENCRYPTION_SECRET | string | `"<ENTER_SECRET_HERE>"` | Key that encrypts stored credentials. Never change it once data exists. |
 | applications.server.env.HTTPS | int | `0` | 1 serves HTTPS on 443 with the built-in self-signed certificate, 0 serves HTTP on 80. |
 | commonAnnotations | object | `{}` | Annotations added to every object and both pods. |
@@ -45,45 +48,59 @@ values.yaml itself and in the [README](README.md).
 | containers.mysql.startup | object | `{"enabled":true,"failureThreshold":30,"initialDelaySeconds":10,"periodSeconds":10,"timeoutSeconds":5}` | MySQL startup probe; failureThreshold x periodSeconds is the first-boot budget. |
 | containers.mysql.tolerations | list | `[]` | MySQL pod tolerations. |
 | containers.mysql.topologySpreadConstraints | list | `[]` | MySQL pod topology spread constraints. |
+| containers.rte.enabled | bool | `true` | Run the RTE next to the app. Without it, playbook forms need a runner added by hand. |
+| containers.rte.existingTokenSecret | string | `""` | Existing Secret holding the RTE token. Empty uses the <release>-keys Secret. |
+| containers.rte.existingTokenSecretKey | string | `"RTE_TOKEN"` | Key of the token in existingTokenSecret. |
+| containers.rte.extraEnv | list | `[]` | Extra env entries for the RTE, written after the generated ones so they win. |
+| containers.rte.extraEnvFrom | list | `[]` | ConfigMaps or Secrets injected as environment into the RTE. |
+| containers.rte.extraVolumeMounts | list | `[]` | Extra volume mounts for the RTE. |
+| containers.rte.image | string | `"ghcr.io/ansibleforms/ansibleforms-rte-full:7.0.0"` | AnsibleForms RTE image. Keep it on the app's release, or one with the same RTE contract. |
+| containers.rte.imagePullPolicy | string | `"IfNotPresent"` | RTE image pull policy. |
+| containers.rte.liveness | object | `{"failureThreshold":3,"periodSeconds":30,"timeoutSeconds":5}` | RTE liveness probe (HTTP /live). |
+| containers.rte.port | int | `8000` | Port the RTE listens on inside the pod. Any free port above 1024. |
+| containers.rte.resources | object | `{"limits":{"cpu":"2","memory":"2048Mi"},"requests":{"cpu":"250m","memory":"256Mi"}}` | RTE resources. |
+| containers.rte.runnerName | string | `"rte"` | Name of the runner the seed creates. |
+| containers.rte.seedRunner | bool | `true` | Register the RTE as the app's default runner through a config seed. Off, the RTE adds itself as runner 127.0.0.1. |
+| containers.rte.startup | object | `{"failureThreshold":60,"initialDelaySeconds":5,"periodSeconds":5,"timeoutSeconds":5}` | RTE startup probe (HTTP /ready); failureThreshold x periodSeconds is the budget. |
 | containers.server.affinity | object | `{}` | Server pod affinity. |
 | containers.server.bindPrivilegedPorts | bool | `true` | Let the non-root server bind ports 80 and 443 (sets net.ipv4.ip_unprivileged_port_start). |
 | containers.server.extraEnv | list | `[]` | Extra env entries for the server, written after the generated ones so they win. |
 | containers.server.extraEnvFrom | list | `[]` | ConfigMaps or Secrets injected as environment into the server. |
-| containers.server.image | string | `"ghcr.io/ansibleforms/ansibleforms:6.5.5"` | AnsibleForms image. |
+| containers.server.image | string | `"ghcr.io/ansibleforms/ansibleforms:7.0.0"` | AnsibleForms image. |
 | containers.server.imagePullSecrets | list | `[]` | Pull secrets for the AnsibleForms image only; overrides imagePullSecrets. |
 | containers.server.initContainers | list | `[]` | Init containers for the server pod. |
-| containers.server.liveness | object | `{"failureThreshold":3,"initialDelaySeconds":15,"path":"/","periodSeconds":15,"timeoutSeconds":15}` | Server liveness probe (HTTP). |
+| containers.server.liveness | object | `{"failureThreshold":3,"initialDelaySeconds":15,"path":"/api/v2/live","periodSeconds":15,"timeoutSeconds":15}` | Server liveness probe (HTTP). The path is relative to BASE_URL. |
 | containers.server.nodeSelector | object | `{}` | Server pod nodeSelector. |
 | containers.server.podAnnotations | object | `{}` | Extra annotations on the server pod; changing them triggers a rollout. |
 | containers.server.podLabels | object | `{}` | Extra labels on the server pod. |
 | containers.server.podSecurityContext | object | `{"fsGroup":1000,"fsGroupChangePolicy":"OnRootMismatch","runAsGroup":1000,"runAsNonRoot":true,"runAsUser":1000,"seccompProfile":{"type":"RuntimeDefault"}}` | Server pod security context. Set to null together with securityContext to drop both. |
 | containers.server.priorityClassName | string | `""` | Server pod priority class. |
-| containers.server.readiness | object | `{"failureThreshold":3,"initialDelaySeconds":15,"path":"/","periodSeconds":15,"timeoutSeconds":15}` | Server readiness probe (HTTP). |
-| containers.server.replicas | int | `1` | Server replicas. Keep 1: the pods share one volume and one scheduler. |
+| containers.server.readiness | object | `{"failureThreshold":3,"initialDelaySeconds":15,"path":"/api/v2/ready","periodSeconds":15,"timeoutSeconds":15}` | Server readiness probe (HTTP). The path is relative to BASE_URL. |
+| containers.server.replicas | int | `1` | Server replicas, 0 or 1. Each pod runs the whole app and its own RTE; 0 stops it. |
 | containers.server.resources | object | `{"limits":{"cpu":"4","memory":"4096Mi"},"requests":{"cpu":"1","memory":"1024Mi"}}` | Server container resources. |
 | containers.server.serviceAccountName | string | `""` | Existing ServiceAccount for the server pod. Empty uses the namespace default. |
-| containers.server.startup | object | `{"enabled":true,"failureThreshold":30,"initialDelaySeconds":10,"path":"/","periodSeconds":10,"timeoutSeconds":5}` | Server startup probe (HTTP). |
+| containers.server.startup | object | `{"enabled":true,"failureThreshold":30,"initialDelaySeconds":10,"path":"/api/v2/ready","periodSeconds":10,"timeoutSeconds":5}` | Server startup probe (HTTP). The path is relative to BASE_URL. |
 | containers.server.stdin | bool | `false` | Keep stdin open on the server container. |
 | containers.server.strategy | string | `"Recreate"` | Deployment strategy, Recreate or RollingUpdate (or the Kubernetes shape). |
 | containers.server.tolerations | list | `[]` | Server pod tolerations. |
 | containers.server.topologySpreadConstraints | list | `[]` | Server pod topology spread constraints. |
 | containers.server.tty | bool | `false` | Allocate a TTY for the server container. |
-| forms.configMap.enabled | bool | `false` | Mount forms.yaml from a ConfigMap. |
-| forms.configMap.key | string | `"forms.yaml"` | Key in the ConfigMap that holds forms.yaml. |
-| forms.configMap.mountPath | string | `"/app/dist/persistent/forms.yaml"` | Where forms.yaml is mounted. |
-| forms.configMap.name | string | `""` | Name of the ConfigMap holding forms.yaml. |
+| forms.configMap.enabled | bool | `false` | Mount config.yaml (categories, roles, constants) from a ConfigMap. |
+| forms.configMap.key | string | `"config.yaml"` | Key in the ConfigMap that holds config.yaml. |
+| forms.configMap.mountPath | string | `"/app/dist/persistent/config.yaml"` | Where config.yaml is mounted. |
+| forms.configMap.name | string | `""` | Name of the ConfigMap holding config.yaml. |
 | forms.customJs.enabled | bool | `false` | Mount custom.js from a ConfigMap. |
 | forms.customJs.key | string | `"custom.js"` | Key in the ConfigMap that holds custom.js. |
 | forms.customJs.mountPath | string | `"/app/dist/src/functions/custom.js"` | Where custom.js is mounted. |
 | forms.customJs.name | string | `""` | Name of the ConfigMap holding custom.js. |
-| forms.extraFormsConfigMap.enabled | bool | `false` | Mount extra form definitions from a ConfigMap. |
-| forms.extraFormsConfigMap.mountPath | string | `"/app/dist/persistent/forms"` | Folder the extra form definitions are mounted in. |
-| forms.extraFormsConfigMap.name | string | `""` | Name of the ConfigMap holding the extra form definitions. |
+| forms.extraFormsConfigMap.enabled | bool | `false` | Mount the form files (one or more forms per key) from a ConfigMap. |
+| forms.extraFormsConfigMap.mountPath | string | `"/app/dist/persistent/forms"` | The forms folder they are mounted as. |
+| forms.extraFormsConfigMap.name | string | `""` | Name of the ConfigMap holding the form files. |
 | fullnameOverride | string | `""` | Replaces the release name as the prefix of every resource name. |
 | imagePullSecrets | list | `[]` | Pull secrets for both images; they must already exist in the namespace. |
 | ingress.annotations | object | `{"nginx.ingress.kubernetes.io/rewrite-target":"/","nginx.ingress.kubernetes.io/ssl-redirect":"true"}` | Annotations on the Ingress. |
 | ingress.className | string | `"nginx"` | IngressClass name. |
-| ingress.enabled | bool | `true` | Create an Ingress. |
+| ingress.enabled | bool | `true` | Create an Ingress. With a ClusterIP Service it also sets TRUST_PROXY=1 unless applications.server.env sets it. |
 | ingress.extraAnnotations | object | `{}` | Extra annotations on the Ingress, merged with ingress.annotations. |
 | ingress.extraHosts | list | `[]` | Additional hostnames. |
 | ingress.extraPaths | list | `[]` | Additional paths. |

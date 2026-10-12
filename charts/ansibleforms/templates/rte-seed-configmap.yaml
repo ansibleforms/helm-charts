@@ -1,0 +1,16 @@
+{{- if eq (include "ansibleforms.rte.seedEnabled" .) "true" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ansibleforms.rte.seedName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ansibleforms.server.labels" . | nindent 4 }}
+  {{- with (include "ansibleforms.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+data:
+  seed.yaml: |
+    {{- include "ansibleforms.rte.seed" . | nindent 4 }}
+{{- end }}
