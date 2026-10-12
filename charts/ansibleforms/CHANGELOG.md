@@ -23,10 +23,14 @@ AnsibleForms 7.
 - **A new install connects to the bundled MySQL as `ansibleforms`, not root.** With
   `applications.mysql.user` left empty, the bundled MySQL creates that user with rights on
   the AnsibleForms schema only, and root stays on localhost for the server's own
-  administration. An upgrade keeps the user its Secret already holds, so an existing
-  release goes on connecting as root, and so does a database of your own
+  administration. `helm upgrade` reads the user back from the release's Secret, so an
+  existing release goes on connecting as root, and so does a database of your own
   (`mysql.enabled: false`) when no user is given. Set `applications.mysql.user: root` to
   choose root on a new install.
+- **Rendered without a cluster, an empty `applications.mysql.user` is refused** when the
+  chart deploys MySQL. `helm template`, and so Argo CD and Flux, cannot read the Secret
+  back: the chart would have guessed `ansibleforms`, a user a 6.x data directory does not
+  have. Set it: `root` to keep a 6.x release, `ansibleforms` on a new install.
 
 - **The server probes ask the app's own endpoints**: `/api/v2/ready` for the startup and
   readiness probes, `/api/v2/live` for liveness, instead of `/`. Ready now means the database
@@ -74,7 +78,11 @@ AnsibleForms 7.
    `applications.rte.env`: the RTE reads them now. If your playbooks need collections or
    Python libraries the RTE image lacks, build your own from the app's `Dockerfile.rte` and
    set `containers.rte.image`.
-5. Upgrade the chart. On its first start 7 migrates the database, and the `rte` runner
+5. With Argo CD, Flux or anything else that renders with `helm template`, set
+   `applications.mysql.user: root` (or the user your release connects as) before the
+   upgrade: the chart cannot read it back from the cluster there, and refuses to guess.
+   `helm upgrade` needs nothing.
+6. Upgrade the chart. On its first start 7 migrates the database, and the `rte` runner
    appears as the default under Connections > Runners.
 
 To stay on 6, pin the chart: `--version "~6"`.

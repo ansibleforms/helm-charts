@@ -95,7 +95,15 @@ applications:
   mysql:
     # -- Database password. Leave out with secrets.existingSecret or secrets.generate.
     password: <ENTER_PASSWORD_HERE>
-    # -- Database user. Empty : "ansibleforms" on a new install with the bundled MySQL, which creates it with rights on the AnsibleForms schema only ; root with your own database ; an upgrade keeps the user its Secret holds.
+    # Left empty, the chart reads the user back from the release's Secret, so an upgrade
+    # keeps the one it connects as (root, for a release from chart 6.x). A new install
+    # with the bundled MySQL gets "ansibleforms", which MySQL creates with rights on the
+    # AnsibleForms schema only, and a database of your own gets root.
+    #
+    # Reading the Secret back needs a cluster. Under helm template, and so Argo CD and
+    # Flux, the chart cannot, and with the bundled MySQL it refuses an empty user rather
+    # than guess: set root to keep a 6.x release as it is, ansibleforms on a new install.
+    # -- Database user. Empty keeps the user the Secret holds, or "ansibleforms" on a new install with the bundled MySQL. Required under helm template, Argo CD or Flux.
     user: ""
     # Defaults to the bundled service on "mysql":3306. Point these at your own
     # server when mysql.enabled is false.

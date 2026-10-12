@@ -750,6 +750,7 @@ jobs:
             --set applications.mysql.password=null \
             --set applications.server.env.ADMIN_PASSWORD=null \
             --set applications.server.env.ENCRYPTION_SECRET=null \
+            --set applications.mysql.user=null \
             --set secrets.generate=true --wait --timeout 12m
 
           read_key() {
@@ -765,6 +766,9 @@ jobs:
             echo "::error::Generated ENCRYPTION_SECRET is ${#enc} characters, not 32."; exit 1; }
           [ -n "$(read_key DB_PASSWORD)" ] && [ -n "$(read_key ADMIN_PASSWORD)" ] || {
             echo "::error::A generated credential came out empty."; exit 1; }
+          # No user given and a cluster to read: a new install connects as "ansibleforms"
+          [ "$(read_key DB_USER)" = "ansibleforms" ] || {
+            echo "::error::An empty applications.mysql.user gave $(read_key DB_USER), not ansibleforms."; exit 1; }
 
           before="$enc"
           pod_before="$(kubectl -n generated get pods -o name | sort | tr '\n' ' ')"
@@ -774,11 +778,14 @@ jobs:
               --set applications.mysql.password=null \
               --set applications.server.env.ADMIN_PASSWORD=null \
               --set applications.server.env.ENCRYPTION_SECRET=null \
+              --set applications.mysql.user=null \
               --set secrets.generate=true --wait --timeout 12m >/dev/null
           done
           [ "$(read_key ENCRYPTION_SECRET)" = "$before" ] || {
             echo "::error::ENCRYPTION_SECRET changed across an upgrade. Everything it encrypted is now unreadable."
             exit 1; }
+          [ "$(read_key DB_USER)" = "ansibleforms" ] || {
+            echo "::error::The upgrades did not keep the database user the Secret held."; exit 1; }
           [ "$(kubectl -n generated get pods -o name | sort | tr '\n' ' ')" = "$pod_before" ] || {
             echo "::error::Generation recycled the pods on an upgrade that changed nothing."; exit 1; }
           echo "Stable across two upgrades, and nothing was recycled."
@@ -795,6 +802,7 @@ jobs:
             --set applications.mysql.password=null \
             --set applications.server.env.ADMIN_PASSWORD=null \
             --set applications.server.env.ENCRYPTION_SECRET=null \
+            --set applications.mysql.user=null \
             --set secrets.generate=true --wait --timeout 12m
           [ "$(read_key ENCRYPTION_SECRET)" = "$before" ] || {
             echo "::error::A reinstall generated a different key."; exit 1; }

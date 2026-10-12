@@ -1,0 +1,15 @@
+---
+# No database user, the bundled MySQL, and no cluster to read the release's Secret
+# back from. An upgrade from chart 6.x connects as root and its data directory has no
+# other user, so guessing "ansibleforms" here would leave the app unable to connect.
+#
+# This is what `helm template` does, and therefore what Argo CD and Flux do on an
+# upgrade, so the chart asks for the user instead of guessing.
+applications:
+  mysql:
+    password: ci-not-a-real-password
+  server:
+    env:
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: ci-not-a-real-password
+      ENCRYPTION_SECRET: ci-not-a-real-secret

@@ -85,8 +85,13 @@
   made by an earlier chart connects as root, and its data directory has no other user),
   and a new install gets "ansibleforms", which the bundled MySQL creates with
   rights on the AnsibleForms schema only (root with a database of your own, as
-  before : nothing creates the user there). Empty when it cannot be known : an
-  existingSecret rendered without a cluster to read it.
+  before : nothing creates the user there).
+
+  Reading the Secret back needs a cluster. Rendered without one (helm template, and so
+  Argo CD and Flux) an upgrade from 6.x would get "ansibleforms", a user its data
+  directory does not have, and the app would never connect. So with the bundled MySQL
+  and nothing to read, an empty user is refused: it has to be given. Empty otherwise
+  when it cannot be known : an existingSecret on a cluster where it does not exist yet.
 */}}
 {{- define "ansibleforms.dbUser" -}}
 {{- $appMysql := (.Values.applications | default dict).mysql | default dict -}}
@@ -96,11 +101,14 @@
 {{- else -}}
 {{- $existing := (lookup "v1" "Secret" .Release.Namespace (include "ansibleforms.secretName" .)) | default dict -}}
 {{- $user := dig "data" "DB_USER" "" $existing -}}
+{{- $bundled := dig "enabled" true (.Values.mysql | default dict) -}}
 {{- if $user -}}
 {{- b64dec $user -}}
+{{- else if and $bundled (not (lookup "v1" "Namespace" "" "kube-system")) -}}
+{{- fail "\n\napplications.mysql.user is empty, and this is being rendered without a cluster to read (helm template, so Argo CD and Flux too), so the chart cannot tell which user the release already connects as.\n\nA release installed by chart 6.x connects as root, and its MySQL data directory has no other user. Guessing \"ansibleforms\" would point AnsibleForms at a user that does not exist, and it would never connect.\n\nSet applications.mysql.user:\n\n  root          to keep what a release from chart 6.x connects as\n  ansibleforms  on a new install: the bundled MySQL creates it, with rights on the AnsibleForms schema only\n\nWith secrets.existingSecret, give the DB_USER that Secret holds.\n" -}}
 {{- else if not $secrets.existingSecret -}}
 {{- /* the bundled MySQL creates "ansibleforms" ; a database of your own keeps the old default */ -}}
-{{- if dig "enabled" true (.Values.mysql | default dict) -}}ansibleforms{{- else -}}root{{- end -}}
+{{- if $bundled -}}ansibleforms{{- else -}}root{{- end -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

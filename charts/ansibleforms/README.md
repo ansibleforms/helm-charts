@@ -459,6 +459,19 @@ you do not set `existingSecret`, the chart will happily create its own Secret
 under that name and overwrite yours on the next sync. It does at least refuse
 to write the placeholder passwords from `values.yaml` into it.
 
+### 6c. The database user
+
+`applications.mysql.user` is the user AnsibleForms connects with. Left empty, the chart
+reads it back from the release's Secret, so an upgrade keeps it: a release installed by chart
+6.x connects as root, and its MySQL data directory has no other user. A new install with the
+bundled MySQL gets `ansibleforms`, which MySQL creates with rights on the AnsibleForms schema
+only, and a database of your own gets root.
+
+Argo CD and Flux render with `helm template`, where there is no Secret to read back. With the
+bundled MySQL the chart then refuses an empty user rather than guess one the data directory
+may not have, so set it: `root` to keep a 6.x release as it is, `ansibleforms` on a new
+install. With `secrets.existingSecret`, give the `DB_USER` that Secret holds.
+
 ### 7. Using a database the chart does not manage
 
 Set `mysql.enabled: false` and no MySQL Deployment, Service, PVC or ConfigMap is

@@ -4,8 +4,11 @@
 applications:
   mysql:
     password: ci-not-a-real-password
-    # no user : the default, "ansibleforms", which the bundled MySQL creates with rights on
-    # the AnsibleForms schema only (no-ingress-values.yaml keeps covering root)
+    # what a new install takes when the user is left empty and the chart can read the
+    # cluster : "ansibleforms", which the bundled MySQL creates with rights on the
+    # AnsibleForms schema only (no-ingress-values.yaml keeps covering root). Given here
+    # because lint and template have no cluster, and refuse an empty user there.
+    user: ansibleforms
   server:
     env:
       HTTPS: 0
