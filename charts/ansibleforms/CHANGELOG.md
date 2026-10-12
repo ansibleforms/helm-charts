@@ -35,8 +35,10 @@ AnsibleForms 7.
   RTE does. It shares the app's volume and is reached on `127.0.0.1`, so nothing new is
   published. Settings are under `containers.rte`, and `containers.rte.enabled: false` leaves it out.
 - **The RTE is registered as the default runner through a config seed**, a runner named `rte`
-  that is read-only in the interface. With a seed of your own (`CONFIG_SEED_PATH` set), the
-  chart leaves the seed to you: add the runner with `token: ${RTE_TOKEN}`.
+  that is read-only in the interface. The RTE gets the same address as `RTE_URL`, so it
+  recognises that runner and adds no other. With `containers.rte.seedRunner: false` or a seed
+  of your own (`CONFIG_SEED_PATH` set), the RTE adds itself as one runner, `127.0.0.1`, kept
+  across restarts; add it to your seed with `token: ${RTE_TOKEN}` to name it yourself.
 - **`applications.rte.token`**, the token the app and the RTE share. Left empty, the chart
   generates one into the `<release>-keys` Secret and keeps it across upgrades, or reads it
   from `containers.rte.existingTokenSecret`.

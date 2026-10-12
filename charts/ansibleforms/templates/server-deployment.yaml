@@ -378,6 +378,14 @@ spec:
             - name: HTTPS
               value: "0"
 
+            {{- /*
+              The address it registers itself under (Connections > Runners): the one the seed
+              declares, so the seeded runner and the RTE are one row. Without the seed it is a
+              stable row of its own, instead of a new one on the pod IP at every start.
+            */}}
+            - name: RTE_URL
+              value: {{ include "ansibleforms.rte.url" . | quote }}
+
             - name: DB_HOST
               value: {{ include "ansibleforms.mysql.host" . | quote }}
 

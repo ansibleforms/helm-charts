@@ -577,9 +577,16 @@ is not a key to any data, so Argo CD and Flux, which render without a cluster to
 only see the Secret change on each sync; set `applications.rte.token`, or point
 `containers.rte.existingTokenSecret` at a Secret you manage, to keep it still.
 
+The RTE is told that same address as `RTE_URL`, so it recognises the seeded runner as its
+own. With `containers.rte.seedRunner: false` it adds itself instead: one runner named
+`127.0.0.1` (`127.0.0.1-<port>` when the port is not 8000) on `http://127.0.0.1:<port>`, the
+default unless another RTE runner already is, and the same row after every restart.
+`RTE_REGISTER: "0"` under `applications.rte.env` turns that off; add the runner by hand then.
+
 **A config seed of your own.** The app reads one seed, from `CONFIG_SEED_PATH`. When you set
-it, the chart leaves the seed to you and passes the token to the app as `RTE_TOKEN`, so add
-the runner to your seed:
+it, the chart leaves the seed to you and passes the token to the app as `RTE_TOKEN`. The RTE
+then adds itself as above; to declare the runner yourself, with a name of your choice, add it
+to your seed:
 
 ```yaml
 runners:

@@ -542,10 +542,16 @@ containers:
     # The chart registers the RTE with the app through a config seed: a runner named after
     # runnerName, type rte, on http://127.0.0.1:<port>, with the token, ticked as the
     # default. The seed re-applies it on every start, so the runner is read-only in the
-    # interface. With a config seed of your own (CONFIG_SEED_PATH set in
-    # applications.server.env or containers.server.extraEnv) the chart leaves the seed to
-    # you: add the runner to it, with token: ${RTE_TOKEN}.
-    # -- Register the RTE as the app's default runner through a config seed.
+    # interface. The RTE gets the same address as RTE_URL, so it recognises that runner as
+    # its own and adds no other.
+    #
+    # With seedRunner off, or a config seed of your own (CONFIG_SEED_PATH set in
+    # applications.server.env or containers.server.extraEnv), the RTE adds itself instead:
+    # one runner named 127.0.0.1 (127.0.0.1-<port> off 8000), on that same address, kept
+    # across restarts and the default unless another RTE runner is. Add the runner to your
+    # own seed, with token: ${RTE_TOKEN}, to name it yourself. RTE_REGISTER: "0" in
+    # applications.rte.env turns that off, and then the runner is added by hand.
+    # -- Register the RTE as the app's default runner through a config seed. Off, the RTE adds itself as runner 127.0.0.1.
     seedRunner: true
     # -- Name of the runner the seed creates.
     runnerName: rte

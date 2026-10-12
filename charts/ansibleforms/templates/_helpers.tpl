@@ -412,6 +412,25 @@ app.kubernetes.io/component: database
 {{- end -}}
 
 {{- /*
+  The address the app reaches the RTE on: 127.0.0.1, since both share the pod. The seed
+  writes it as the runner's uri and the RTE gets it as RTE_URL, so the row it registers
+  itself is that same runner. Without RTE_URL it registered http://<pod IP>:<port>, which
+  matched nothing, and every pod start added another runner.
+*/}}
+{{- define "ansibleforms.rte.url" -}}
+{{- printf "http://127.0.0.1:%v" (include "ansibleforms.rte.port" .) -}}
+{{- end -}}
+
+{{- /*
+  The name the RTE registers itself under when nothing declares the runner (no chart seed):
+  the host of RTE_URL, with the port when it is not 8000, as the app names it.
+*/}}
+{{- define "ansibleforms.rte.selfName" -}}
+{{- $port := toString (include "ansibleforms.rte.port" .) -}}
+{{- if eq $port "8000" -}}127.0.0.1{{- else -}}{{- printf "127.0.0.1-%s" $port -}}{{- end -}}
+{{- end -}}
+
+{{- /*
   The token is kept apart from <release>-secrets on purpose. That Secret may be one the
   user manages (secrets.existingSecret), and asking everybody who does to add a key before
   the next upgrade would turn a new feature into a broken rollout. It lives in
@@ -466,7 +485,7 @@ runners:
     - name: {{ $rte.runnerName | default "rte" | quote }}
       type: rte
       description: "The RTE in the server pod, from the Helm chart"
-      uri: {{ printf "http://127.0.0.1:%v" (include "ansibleforms.rte.port" .) | quote }}
+      uri: {{ include "ansibleforms.rte.url" . | quote }}
       token: "${RTE_TOKEN}"
       is_default: true
 {{- end -}}
