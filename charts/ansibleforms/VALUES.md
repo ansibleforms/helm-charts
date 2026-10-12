@@ -16,7 +16,7 @@ values.yaml itself and in the [README](README.md).
 | applications.mysql.password | string | `"<ENTER_PASSWORD_HERE>"` | Database password. Leave out with secrets.existingSecret or secrets.generate. |
 | applications.mysql.user | string | `""` | Database user. Empty keeps the user the Secret holds, or "ansibleforms" on a new install with the bundled MySQL. Required under helm template, Argo CD or Flux. |
 | applications.rte.env | object | `{}` | Environment variables for the RTE (ANSIBLE_PATH, PROCESS_MAX_BUFFER, NODE_EXTRA_CA_CERTS and so on). |
-| applications.rte.token | string | `""` | RTE token, 16 characters or more. Empty generates one. Ignored with containers.rte.existingTokenSecret. |
+| applications.rte.token | string | `""` | RTE token, 16 characters or more. Empty generates one, which needs a cluster to read (not under helm template, Argo CD or Flux). Ignored with containers.rte.existingTokenSecret. |
 | applications.server.env | object | `{"ADMIN_PASSWORD":"<ENTER_PASSWORD_HERE>","ADMIN_USERNAME":"admin","ALLOW_ENV_EDIT":0,"ENCRYPTION_SECRET":"<ENTER_SECRET_HERE>","HTTPS":0}` | Environment variables for AnsibleForms. Any application setting can be added here. |
 | applications.server.env.ADMIN_PASSWORD | string | `"<ENTER_PASSWORD_HERE>"` | Password of the local admin user created on first start. |
 | applications.server.env.ADMIN_USERNAME | string | `"admin"` | Name of the local admin user created on first start. |

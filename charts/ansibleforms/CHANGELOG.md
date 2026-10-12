@@ -50,14 +50,17 @@ AnsibleForms 7.
   across restarts; add it to your seed with `token: ${RTE_TOKEN}` to name it yourself.
 - **`applications.rte.token`**, the token the app and the RTE share. Left empty, the chart
   generates one into the `<release>-keys` Secret and keeps it across upgrades, or reads it
-  from `containers.rte.existingTokenSecret`.
+  from `containers.rte.existingTokenSecret`. Under `helm template` (Argo CD, Flux) it refuses
+  to generate one, as `secrets.generate` does: a token made on every sync would leave the
+  app and the RTE holding different ones after a restart, and every job refused.
 - **The RTE has a startup and a liveness probe** on its `/ready` and `/live`, which need no
   token. The startup budget is 300 seconds, as long as the app's, since on a first install it
   waits for the app to create the schema.
 - **`applications.rte.env`** for what the RTE reads rather than the app, such as `ANSIBLE_PATH`.
 - **`ACCESS_TOKEN_SECRET` is set**, generated once into the `<release>-keys` Secret and kept
   across upgrades, so a pod restart no longer signs everybody out. Set
-  `applications.server.env.ACCESS_TOKEN_SECRET` to choose it.
+  `applications.server.env.ACCESS_TOKEN_SECRET`, or an entry in `containers.server.extraEnv`,
+  to choose it; under `helm template` (Argo CD, Flux) it has to be set.
 
 ### Removed
 
@@ -81,7 +84,9 @@ AnsibleForms 7.
 5. With Argo CD, Flux or anything else that renders with `helm template`, set
    `applications.mysql.user: root` (or the user your release connects as) before the
    upgrade: the chart cannot read it back from the cluster there, and refuses to guess.
-   `helm upgrade` needs nothing.
+   Set `applications.server.env.ACCESS_TOKEN_SECRET` and `applications.rte.token` (or
+   `containers.rte.existingTokenSecret`) too, which the chart cannot generate there.
+   `helm upgrade` needs none of this.
 6. Upgrade the chart. On its first start 7 migrates the database, and the `rte` runner
    appears as the default under Connections > Runners.
 

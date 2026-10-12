@@ -550,8 +550,13 @@ and talk plain HTTP inside the cluster, which is what most people want.
 AnsibleForms signs its sessions with `ACCESS_TOKEN_SECRET`. The chart generates one on the
 first install into the `<release>-keys` Secret and keeps it across upgrades, so a restarted
 pod no longer signs everybody out. To choose it yourself, set
-`applications.server.env.ACCESS_TOKEN_SECRET`, or take it from a Secret of your own through
-`containers.server.extraEnv`, which wins over the generated one. Changing it ends every session.
+`applications.server.env.ACCESS_TOKEN_SECRET`, or take it from a Secret of your own with an
+`ACCESS_TOKEN_SECRET` entry in `containers.server.extraEnv`; the chart then generates none.
+Changing it ends every session.
+
+Generating it needs the cluster, to read back what was generated before. Argo CD and Flux
+render with `helm template`, where there is none, so the chart refuses to generate it there
+and says which value to set, as it does for `secrets.generate`.
 
 ## Running playbooks: the RTE
 
@@ -584,11 +589,12 @@ adding `RUN ansible-galaxy collection install ...` or `RUN /venv/bin/pip install
 point `containers.rte.image` at it. Keep its release on the app's, or on one with the same
 RTE contract: Test connection under Connections > Runners shows both.
 
-**The token.** The app sends it with every call and the RTE answers nothing without it.
-Left empty, the chart generates one on the first install and keeps it across upgrades. It
-is not a key to any data, so Argo CD and Flux, which render without a cluster to read,
-only see the Secret change on each sync; set `applications.rte.token`, or point
-`containers.rte.existingTokenSecret` at a Secret you manage, to keep it still.
+**The token.** The app sends it with every call and the RTE runs no job without it. Left
+empty, the chart generates one on the first install and keeps it across upgrades. Argo CD and
+Flux render with `helm template`, where the chart cannot read it back, and a token generated
+on every sync would let the two containers drift apart: after one of them restarts, every
+job is refused with a 401. So there the chart refuses to generate it: set
+`applications.rte.token`, or point `containers.rte.existingTokenSecret` at a Secret you manage.
 
 The RTE is told that same address as `RTE_URL`, so it recognises the seeded runner as its
 own. With `containers.rte.seedRunner: false` it adds itself instead: one runner named

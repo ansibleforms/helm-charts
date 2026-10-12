@@ -751,6 +751,8 @@ jobs:
             --set applications.server.env.ADMIN_PASSWORD=null \
             --set applications.server.env.ENCRYPTION_SECRET=null \
             --set applications.mysql.user=null \
+            --set applications.server.env.ACCESS_TOKEN_SECRET=null \
+            --set applications.rte.token=null \
             --set secrets.generate=true --wait --timeout 12m
 
           read_key() {
@@ -770,6 +772,15 @@ jobs:
           [ "$(read_key DB_USER)" = "ansibleforms" ] || {
             echo "::error::An empty applications.mysql.user gave $(read_key DB_USER), not ansibleforms."; exit 1; }
 
+          # The keys the chart generates on its own, into <release>-keys, likewise
+          read_keys() {
+            kubectl -n generated get secret generated-keys -o jsonpath="{.data.$1}" | base64 -d
+          }
+          session="$(read_keys ACCESS_TOKEN_SECRET)"
+          token="$(read_keys RTE_TOKEN)"
+          [ "${#session}" = "64" ] && [ "${#token}" = "32" ] || {
+            echo "::error::Generated ACCESS_TOKEN_SECRET is ${#session} and RTE_TOKEN ${#token} characters, not 64 and 32."; exit 1; }
+
           before="$enc"
           pod_before="$(kubectl -n generated get pods -o name | sort | tr '\n' ' ')"
           for i in 1 2; do
@@ -779,6 +790,8 @@ jobs:
               --set applications.server.env.ADMIN_PASSWORD=null \
               --set applications.server.env.ENCRYPTION_SECRET=null \
               --set applications.mysql.user=null \
+              --set applications.server.env.ACCESS_TOKEN_SECRET=null \
+              --set applications.rte.token=null \
               --set secrets.generate=true --wait --timeout 12m >/dev/null
           done
           [ "$(read_key ENCRYPTION_SECRET)" = "$before" ] || {
@@ -786,6 +799,8 @@ jobs:
             exit 1; }
           [ "$(read_key DB_USER)" = "ansibleforms" ] || {
             echo "::error::The upgrades did not keep the database user the Secret held."; exit 1; }
+          [ "$(read_keys ACCESS_TOKEN_SECRET)" = "$session" ] && [ "$(read_keys RTE_TOKEN)" = "$token" ] || {
+            echo "::error::A generated key moved across an upgrade: the app and the RTE would drift apart."; exit 1; }
           [ "$(kubectl -n generated get pods -o name | sort | tr '\n' ' ')" = "$pod_before" ] || {
             echo "::error::Generation recycled the pods on an upgrade that changed nothing."; exit 1; }
           echo "Stable across two upgrades, and nothing was recycled."
@@ -803,6 +818,8 @@ jobs:
             --set applications.server.env.ADMIN_PASSWORD=null \
             --set applications.server.env.ENCRYPTION_SECRET=null \
             --set applications.mysql.user=null \
+            --set applications.server.env.ACCESS_TOKEN_SECRET=null \
+            --set applications.rte.token=null \
             --set secrets.generate=true --wait --timeout 12m
           [ "$(read_key ENCRYPTION_SECRET)" = "$before" ] || {
             echo "::error::A reinstall generated a different key."; exit 1; }

@@ -132,7 +132,10 @@ applications:
       ALLOW_ENV_EDIT: 0
       # ACCESS_TOKEN_SECRET signs the sessions. Left out, the chart generates one into the
       # <release>-keys Secret and keeps it across upgrades, so nobody is signed out when
-      # the pod restarts. Set it here, or in extraEnv from a Secret of your own, to choose it.
+      # the pod restarts. Set it here, or in containers.server.extraEnv from a Secret of
+      # your own (the chart then generates none), to choose it. Under helm template, and
+      # so Argo CD and Flux, the chart cannot read a generated one back and refuses to
+      # generate it: set it there.
       # ACCESS_TOKEN_SECRET: <a long random string>
 
       # -------- EXTRA ENV VARIABLES FOR SERVER --------
@@ -152,7 +155,12 @@ applications:
     # empty, the chart generates one on the first install and keeps it in the
     # <release>-keys Secret, so it never moves afterwards. It is not a key to any data: the
     # chart's config seed hands the same value to the app's runner on every start.
-    # -- RTE token, 16 characters or more. Empty generates one. Ignored with containers.rte.existingTokenSecret.
+    #
+    # Under helm template, and so Argo CD and Flux, the chart cannot read a generated one
+    # back. A new one on every sync would reach one container and not the other after a
+    # restart, and every job would be refused with a 401, so the chart refuses to generate
+    # it there: set it, or use containers.rte.existingTokenSecret.
+    # -- RTE token, 16 characters or more. Empty generates one, which needs a cluster to read (not under helm template, Argo CD or Flux). Ignored with containers.rte.existingTokenSecret.
     token: ''
     # Settings that belong to the RTE now rather than to the app, such as ANSIBLE_PATH and
     # PROCESS_MAX_BUFFER. Move them here from applications.server.env.
@@ -571,7 +579,7 @@ containers:
     runnerName: rte
 
     # A Secret you manage yourself that holds the token, for Argo CD and Flux, which render
-    # without a cluster to read and cannot keep a generated token.
+    # without a cluster to read: the chart refuses to generate a token there.
     # -- Existing Secret holding the RTE token. Empty uses the <release>-keys Secret.
     existingTokenSecret: ''
     # -- Key of the token in existingTokenSecret.

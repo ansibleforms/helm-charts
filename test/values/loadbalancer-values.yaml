@@ -11,6 +11,11 @@ applications:
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: ci-not-a-real-password
       ENCRYPTION_SECRET: ci-not-a-real-secret
+      # the session key and the RTE token: lint and template have no cluster to read
+      # them back from, and the chart refuses to generate them there
+      ACCESS_TOKEN_SECRET: ci-not-a-real-session-key
+  rte:
+    token: ci-not-a-real-rte-token
 
 ingress:
   enabled: false

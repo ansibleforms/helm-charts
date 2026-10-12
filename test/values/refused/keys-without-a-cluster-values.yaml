@@ -1,0 +1,15 @@
+---
+# Everything given but the session key and the RTE token, with no cluster to read
+# the <release>-keys Secret back from. Generating them here would make new ones on
+# every render, and Argo CD or Flux would write them into the Secret on every sync:
+# after one container restart the app and the RTE hold different tokens and every
+# job is refused with a 401. The chart asks for them instead.
+applications:
+  mysql:
+    password: ci-not-a-real-password
+    user: root
+  server:
+    env:
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: ci-not-a-real-password
+      ENCRYPTION_SECRET: ci-not-a-real-secret

@@ -202,12 +202,14 @@ spec:
                   name: {{ $secretName }}
                   key: ADMIN_PASSWORD
 
-            {{- /* Signs the sessions, so they survive a restart */}}
+            {{- /* Signs the sessions, so they survive a restart. From extraEnv when it sets it. */}}
+            {{- if eq (include "ansibleforms.sessionKeyOwned" .) "true" }}
             - name: ACCESS_TOKEN_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "ansibleforms.keysSecretName" . }}
                   key: ACCESS_TOKEN_SECRET
+            {{- end }}
 
             {{- if $rteOn }}
             {{- /*

@@ -459,6 +459,19 @@ app.kubernetes.io/component: database
 {{- printf "%s-keys" (include "ansibleforms.fullname" .) -}}
 {{- end -}}
 
+{{- /*
+  Whether the chart provides ACCESS_TOKEN_SECRET. Not when containers.server.extraEnv
+  sets it, from a Secret of the user's: the chart then writes neither the key nor the
+  variable, so nothing is generated that nobody reads.
+*/}}
+{{- define "ansibleforms.sessionKeyOwned" -}}
+{{- $found := false -}}
+{{- range $e := (dig "server" "extraEnv" (list) (.Values.containers | default dict)) -}}
+{{- if eq (toString $e.name) "ACCESS_TOKEN_SECRET" -}}{{- $found = true -}}{{- end -}}
+{{- end -}}
+{{- if $found -}}false{{- else -}}true{{- end -}}
+{{- end -}}
+
 {{- define "ansibleforms.rte.tokenSecretName" -}}
 {{- $rte := dig "rte" (dict) (.Values.containers | default dict) -}}
 {{- $rte.existingTokenSecret | default (include "ansibleforms.keysSecretName" .) -}}
