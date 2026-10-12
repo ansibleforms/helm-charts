@@ -50,9 +50,15 @@ if (!check.ok) fail(`Test connection failed: ${JSON.stringify(checked)}`);
 console.log(`Test connection: ${JSON.stringify(checked.details)}`);
 
 // ----- Launch the form and wait for the job -----
+// rawFormData too, the raw field values, as the browser sends them : with LAUNCH_VALIDATION
+// at its default, enforce, a launch without it is refused with a 422
 const launch = await fetch(`${base}/job`, {
   method: "POST", headers,
-  body: JSON.stringify({ formName: "CI RTE", extravars: { greeting: "hello-from-ci" } }),
+  body: JSON.stringify({
+    formName: "CI RTE",
+    extravars: { greeting: "hello-from-ci" },
+    rawFormData: { greeting: "hello-from-ci" },
+  }),
 });
 const launched = await launch.json();
 if (!launch.ok || !launched.id) fail(`Launching the form answered ${launch.status}: ${JSON.stringify(launched)}`);
