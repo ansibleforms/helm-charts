@@ -143,20 +143,18 @@ services:
 
 ingress:
   enabled: true # enable ingress
-  className: nginx
+  className: traefik # the IngressClass of your ingress controller
   hostname: ansibleforms.example.com
   path: /
   pathType: Prefix
   tls:
     enabled: true
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/rewrite-target: /
+  annotations: null # drops the chart's default annotations, which are ingress-nginx ones
   issuer: letsencrypt-prod
   extraHosts: [] # ["other.example.com"]
   extraPaths: [] # [{ path: /api, serviceName: ansibleforms-server, servicePort: 80 }]
-  extraAnnotations: {}
+  extraAnnotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 ```
 
 ### 3. Storage configuration: dynamic provisioning vs static PVs
@@ -509,20 +507,15 @@ number.
 
 What does not follow automatically is your ingress controller: it still has to
 be told to speak TLS to the backend instead of plain HTTP, and the certificate
-AnsibleForms serves is self-signed. Where that setting lives depends on the
-controller.
+AnsibleForms serves is self-signed. Use your ingress controller's way to send
+HTTPS to the backend and to skip verifying its certificate. Some controllers
+read it from the Ingress, which takes `ingress.extraAnnotations`, and others
+from the Service, which takes `services.server.annotations`.
 
-On ingress-nginx it is an annotation on the Ingress:
-
-```yaml
-ingress:
-  extraAnnotations:
-    nginx.ingress.kubernetes.io/backend-protocol: HTTPS
-```
-
-On Traefik the `service.*` settings are read from the **Service**, not from the
-Ingress, so they go under `services.server.annotations`. Skipping verification
-needs a `ServersTransport` object, which the chart does not create:
+Traefik, for example, reads its `service.*` settings from the **Service**, not
+from the Ingress, so they go under `services.server.annotations`. Skipping
+verification needs a `ServersTransport` object, which the chart does not create.
+CI routes the application through Traefik with exactly this setup:
 
 ```yaml
 services:
@@ -908,9 +901,10 @@ networkPolicy:
   server:
     enabled: false
     from:
+      # The namespace your ingress controller runs in
       - namespaceSelector:
           matchLabels:
-            kubernetes.io/metadata.name: ingress-nginx
+            kubernetes.io/metadata.name: traefik
 ```
 
 Off by default, and not only out of caution: NetworkPolicy is enforced by the
