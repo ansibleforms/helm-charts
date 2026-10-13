@@ -30,12 +30,13 @@ containers:
 
 ingress:
   enabled: true
-  className: nginx
+  className: traefik
   hostname: ansibleforms.ci.example.com
   tls:
     enabled: false
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
+  # null drops the chart's default annotations, which are ingress-nginx ones
+  # that Traefik would ignore anyway. Traefik needs none for plain HTTP.
+  annotations: null
 
 storages:
   mysql: {size: 1Gi, accessMode: ReadWriteOnce}

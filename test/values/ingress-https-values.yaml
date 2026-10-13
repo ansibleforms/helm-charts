@@ -2,7 +2,7 @@
 # The same thing with the application terminating TLS itself, so it listens on
 # 443 and the Service moves with it. This is the shape that used to render an
 # Ingress pointing at port 80 against a Service that only published 443, which
-# ingress-nginx answers with a 503.
+# an ingress controller answers with a 503.
 applications:
   mysql:
     password: ci-not-a-real-password
@@ -31,14 +31,24 @@ containers:
 
 ingress:
   enabled: true
-  className: nginx
+  className: traefik
   hostname: ansibleforms.ci.example.com
   tls:
     enabled: false
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-    # The controller has to be told to speak TLS to the backend as well
-    nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+  # null drops the chart's default annotations, which are ingress-nginx ones
+  # that Traefik would ignore anyway.
+  annotations: null
+
+# The controller has to be told to speak TLS to the backend as well. Traefik
+# reads that from the Service, not from the Ingress, and the self-signed
+# certificate needs a ServersTransport that skips verification. The CI job
+# creates one named insecure in the ing-https namespace, which the provider
+# names <namespace>-<name>@kubernetescrd.
+services:
+  server:
+    annotations:
+      traefik.ingress.kubernetes.io/service.serversscheme: https
+      traefik.ingress.kubernetes.io/service.serverstransport: ing-https-insecure@kubernetescrd
 
 storages:
   mysql: {size: 1Gi, accessMode: ReadWriteOnce}
