@@ -96,9 +96,11 @@ anyway fails rather than quietly proving nothing.
 
 **Route through a real ingress controller.** kind ships without one, so the
 Ingress used to be rendered, validated and never asked for a single page. This
-installs ingress-nginx and fetches the application through it, both plain and
-with the application terminating TLS itself. That second case is where a port
-bug once lived: a manifest that validates perfectly and that no controller can
+installs Traefik from its official chart and fetches the application through
+it, both plain and with the application terminating TLS itself, which Traefik
+reaches through the Service annotations and a ServersTransport that skips
+verifying the self-signed certificate. That second case is where a port bug
+once lived: a manifest that validates perfectly and that no controller can
 route.
 
 To try a real install:

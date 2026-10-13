@@ -12,7 +12,7 @@ networkPolicy:
     from:
       - namespaceSelector:
           matchLabels:
-            kubernetes.io/metadata.name: ingress-nginx
+            kubernetes.io/metadata.name: traefik
 
 applications:
   mysql:

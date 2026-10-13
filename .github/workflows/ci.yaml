@@ -1124,20 +1124,23 @@ jobs:
         with:
           node_image: ${{ steps.versions.outputs.kind_node }}
 
-      # ClusterIP and a port-forward rather than the kind specific hostPort
-      # deployment, so this needs nothing special from the cluster. The
-      # admission webhook is off because it adds a minute and catches nothing
-      # that helm lint has not already.
-      - name: Install ingress-nginx
+      # Traefik, from its official chart pinned to an exact release. ingress-nginx
+      # is retired upstream, and Traefik is what the chart is run behind in
+      # practice. ClusterIP and a port-forward rather than the kind specific
+      # hostPort deployment, so this needs nothing special from the cluster; a
+      # LoadBalancer Service would also keep --wait waiting for an address kind
+      # never hands out. The chart installs the CRDs, ServersTransport among
+      # them, and a default IngressClass named traefik.
+      - name: Install Traefik
+        env:
+          TRAEFIK_CHART_VERSION: 41.7.1
         run: |
           set -euo pipefail
-          helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+          helm repo add traefik https://traefik.github.io/charts
           helm repo update
-          helm install ingress-nginx ingress-nginx/ingress-nginx \
-            --namespace ingress-nginx --create-namespace \
-            --set controller.service.type=ClusterIP \
-            --set controller.admissionWebhooks.enabled=false \
-            --set controller.watchIngressWithoutClass=true \
+          helm install traefik traefik/traefik --version "$TRAEFIK_CHART_VERSION" \
+            --namespace traefik --create-namespace \
+            --set service.spec.type=ClusterIP \
             --wait --timeout 8m
 
       - name: Ask for the page, plain and with the application terminating TLS
@@ -1146,8 +1149,20 @@ jobs:
 
           check() {
             ns="$1"; values="$2"; host="$3"
-            echo "::group::$values through a real ingress-nginx"
+            echo "::group::$values through a real Traefik"
             kubectl create namespace "$ns"
+            # The application's certificate is self-signed, so Traefik needs a
+            # ServersTransport that skips verification before it will speak TLS to
+            # it. The HTTPS values point the Service at this one by name; the
+            # plain one gets it too and never uses it.
+            kubectl -n "$ns" apply -f - <<EOF
+          apiVersion: traefik.io/v1alpha1
+          kind: ServersTransport
+          metadata:
+            name: insecure
+          spec:
+            insecureSkipVerify: true
+          EOF
             helm install ing . --namespace "$ns" --values "$values" --wait --timeout 12m >/dev/null
 
             kubectl -n "$ns" get ingress -o jsonpath='{range .items[*]}  backend: {.spec.rules[0].http.paths[0].backend.service}{"\n"}{end}'
@@ -1166,7 +1181,7 @@ jobs:
             if [ "$code" != "200" ]; then
               echo "::error::$values is not reachable through the ingress, got $code."
               kubectl -n "$ns" get ingress,svc,endpointslices
-              kubectl -n ingress-nginx logs deployment/ingress-nginx-controller --tail=40
+              kubectl -n traefik logs deployment/traefik --tail=40
               exit 1
             fi
             case "$body" in
@@ -1178,7 +1193,7 @@ jobs:
             echo "::endgroup::"
           }
 
-          kubectl -n ingress-nginx port-forward svc/ingress-nginx-controller 8080:80 >/dev/null 2>&1 &
+          kubectl -n traefik port-forward svc/traefik 8080:80 >/dev/null 2>&1 &
           PF=$!
           trap 'kill $PF 2>/dev/null || true' EXIT
           sleep 3
@@ -1192,7 +1207,7 @@ jobs:
         if: failure()
         run: |
           kubectl get ingress -A || true
-          kubectl -n ingress-nginx logs deployment/ingress-nginx-controller --tail=100 || true
+          kubectl -n traefik logs deployment/traefik --tail=100 || true
 
   # NetworkPolicy is enforced by the CNI, and kind ships kindnet, which does not
   # enforce it. A policy test on a default cluster would pass while proving
