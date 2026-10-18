@@ -1192,7 +1192,7 @@ jobs:
               exit 1
             fi
             case "$body" in
-              *"Ansible Forms"*) echo "  the page served is AnsibleForms" ;;
+              *"AnsibleForms"* | *"Ansible Forms"*) echo "  the page served is AnsibleForms" ;;
               *) echo "::error::Something answered 200 but it was not the application."; exit 1 ;;
             esac
             helm uninstall ing --namespace "$ns" >/dev/null
