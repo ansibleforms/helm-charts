@@ -1,9 +1,14 @@
 # Changelog
 
-## Unreleased
+## 7.3.0
+
+AnsibleForms 7.3.0.
 
 ### Changed
 
+- **The default image is AnsibleForms 7.3.0**,
+  `ghcr.io/ansibleforms/ansibleforms:7.3.0` (the RTE alike), and `appVersion` follows. See the
+  [7.3.0 release notes](https://github.com/ansibleforms/ansibleforms/releases/tag/7.3.0).
 - **The RTE gets no database credentials.** The app dials it on `127.0.0.1` and keeps one
   WebSocket open (`RTE_MODE=inbound`, AnsibleForms 7.3.0): the RTE container no longer gets
   `DB_HOST`, `DB_USER`, `DB_PASSWORD` or `ENCRYPTION_SECRET`, and takes the job's files from
