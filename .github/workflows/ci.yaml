@@ -1047,6 +1047,18 @@ jobs:
           # tried it. Revision 1 is the published chart this started from, so
           # this walks the whole change backwards, security contexts, volume
           # ownership and all.
+          #
+          # Only within one app minor version: a new minor (7.2 to 7.3) upgrades
+          # the database schema on its first start, and the older app cannot run
+          # on it. Going back across that takes the backup the app made before the
+          # upgrade, restored, which no helm rollback does - so it is not tried.
+          app_prev="$(helm show chart ansibleforms/ansibleforms --version "$PREV" | awk '/^appVersion:/ {gsub(/"/, "", $2); print $2}')"
+          app_here="$(helm show chart . | awk '/^appVersion:/ {gsub(/"/, "", $2); print $2}')"
+          if [ "${app_prev%.*}" != "${app_here%.*}" ]; then
+            echo "No rollback: the app goes from $app_prev to $app_here, a new minor version whose"
+            echo "schema the older app cannot read. Restore the backup made before the upgrade instead."
+            exit 0
+          fi
           echo "Rolling back to revision 1, which is $PREV"
           helm rollback upg 1 --namespace "$NS" --wait --timeout 12m
 
