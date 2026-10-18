@@ -7,7 +7,8 @@
 - **The RTE gets no database credentials.** The app dials it on `127.0.0.1` and keeps one
   WebSocket open (`RTE_MODE=inbound`, AnsibleForms 7.3.0): the RTE container no longer gets
   `DB_HOST`, `DB_USER`, `DB_PASSWORD` or `ENCRYPTION_SECRET`, and takes the job's files from
-  the shared volume (`RTE_FILES=local`).
+  the shared volume (`RTE_FILES=local`). It no longer gets `RTE_URL` either: the seed holds
+  the address, and the RTE has nothing to register.
 - **The config seed declares an RTE credential** with the token and the address, and the
   runner signs in with it (`rte_mode: inbound`), as AnsibleForms 7.3.0 expects. Without the
   chart's seed, the RTE no longer adds itself as a runner: add it as the NOTES show.

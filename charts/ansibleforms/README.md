@@ -614,12 +614,13 @@ collections. When yours need more, or less, build your own on one of the publish
 [examples/rte](https://github.com/ansibleforms/ansibleforms/tree/main/examples/rte) has Dockerfiles to start from. Point `containers.rte.image` at it. Keep its release on the app's, or on one with the same
 RTE contract: Test connection under Connections > Runners shows both.
 
-**The token.** The app sends it with every call and the RTE runs no job without it. Left
-empty, the chart generates one on the first install and keeps it across upgrades. Argo CD and
-Flux render with `helm template`, where the chart cannot read it back, and a token generated
-on every sync would let the two containers drift apart: after one of them restarts, every
-job is refused with a 401. So there the chart refuses to generate it: set
-`applications.rte.token`, or point `containers.rte.existingTokenSecret` at a Secret you manage.
+**The token.** The app signs in to the RTE's socket with it, and the RTE takes no job
+without it. Left empty, the chart generates one on the first install and keeps it across
+upgrades. Argo CD and Flux render with `helm template`, where the chart cannot read it back,
+and a token generated on every sync would let the two containers drift apart: after one of
+them restarts, the app's socket is refused with a 401 and no job runs. So there the chart
+refuses to generate it: set `applications.rte.token`, or point
+`containers.rte.existingTokenSecret` at a Secret you manage.
 
 With `containers.rte.seedRunner: false`, or a config seed of your own, add the runner
 yourself: in your seed, or under Connections > Runners with an RTE credential holding
@@ -627,16 +628,21 @@ yourself: in your seed, or under Connections > Runners with an RTE credential ho
 
 **A config seed of your own.** The app reads one seed, from `CONFIG_SEED_PATH`. When you set
 it, the chart leaves the seed to you and passes the token to the app as `RTE_TOKEN`. The RTE
-then adds itself as above; to declare the runner yourself, with a name of your choice, add it
-to your seed:
+does not add itself, so declare it in your seed, with names of your choice:
 
 ```yaml
+credentials:
+  items:
+    - name: rte
+      credential_type: rte
+      url: http://127.0.0.1:8000
+      password: ${RTE_TOKEN}
 runners:
   items:
     - name: rte
       type: rte
-      uri: http://127.0.0.1:8000
-      token: ${RTE_TOKEN}
+      rte_mode: inbound
+      credential: rte
       is_default: true
 ```
 

@@ -450,10 +450,9 @@ app.kubernetes.io/component: database
 {{- end -}}
 
 {{- /*
-  The address the app reaches the RTE on: 127.0.0.1, since both share the pod. The seed
-  writes it as the runner's uri and the RTE gets it as RTE_URL, so the row it registers
-  itself is that same runner. Without RTE_URL it registered http://<pod IP>:<port>, which
-  matched nothing, and every pod start added another runner.
+  The address the app dials the RTE on: 127.0.0.1, since both share the pod. The seed
+  writes it as the url of the runner's RTE credential, and the NOTES show it for a runner
+  added by hand.
 */}}
 {{- define "ansibleforms.rte.url" -}}
 {{- printf "http://127.0.0.1:%v" (include "ansibleforms.rte.port" .) -}}

@@ -151,10 +151,10 @@ applications:
   # environment), the same server started with AF_ROLE=rte. The chart runs one next to the
   # app, in the server pod (see containers.rte).
   rte:
-    # The token the app sends with every call to the RTE, at least 16 characters. Left
+    # The token the app signs in to the RTE's socket with, at least 16 characters. Left
     # empty, the chart generates one on the first install and keeps it in the
     # <release>-keys Secret, so it never moves afterwards. It is not a key to any data: the
-    # chart's config seed hands the same value to the app's runner on every start.
+    # chart's config seed hands the same value to the runner's RTE credential on every start.
     #
     # Under helm template, and so Argo CD and Flux, the chart cannot read a generated one
     # back. A new one on every sync would reach one container and not the other after a
@@ -602,10 +602,10 @@ containers:
         cpu: 250m
         memory: 256Mi
 
-    # The RTE's /ready and /live need no token, unlike its jobs API. The startup probe
-    # asks /ready, which answers once the database does and the app's schema is there: on
-    # a first install the app creates it, so the budget matches the app's, 300s here. The
-    # liveness probe asks /live. There is no readiness probe on purpose: the app keeps
+    # The RTE's /ready and /live need no token, unlike its socket. The startup probe asks
+    # /ready, which answers as soon as the RTE listens: inbound, it reads no database. The
+    # budget, 300s here, leaves room for a slow image pull or a slow node. The liveness
+    # probe asks /live. There is no readiness probe on purpose: the app keeps
     # serving while the RTE restarts, and a job started then fails with a reason.
     # -- RTE startup probe (HTTP /ready); failureThreshold x periodSeconds is the budget.
     startup:

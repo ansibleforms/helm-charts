@@ -395,13 +395,11 @@ spec:
               value: "0"
 
             {{- /*
-              The address it registers itself under (Connections > Runners): the one the seed
-              declares, so the seeded runner and the RTE are one row. Without the seed it is a
-              stable row of its own, instead of a new one on the pod IP at every start.
+              No RTE_URL and no APP_URL: an inbound RTE uses them only to register itself
+              with the app, and the seed declares the runner instead. With RTE_URL on plain
+              http it would also warn at every start that the token goes in clear, which
+              over 127.0.0.1 inside the pod it never leaves.
             */}}
-            - name: RTE_URL
-              value: {{ include "ansibleforms.rte.url" . | quote }}
-
             - name: NODE_ENV
               value: "production"
 
@@ -447,10 +445,9 @@ spec:
                 - ALL
 
           {{- /*
-            /ready and /live need no token (the jobs API does). Ready means the database
-            answers and the app's schema is there, which on a first install comes after the
-            app has created it: the startup budget matches the app's. Plain HTTP, since the
-            chart sets HTTPS=0 on it above.
+            /ready and /live need no token (the socket does). Inbound, ready means the RTE
+            listens and is not stopping: it reads no database, so it is ready at once.
+            Plain HTTP, since the chart sets HTTPS=0 on it above.
           */}}
           startupProbe:
             httpGet:
