@@ -460,15 +460,6 @@ app.kubernetes.io/component: database
 {{- end -}}
 
 {{- /*
-  The name the RTE registers itself under when nothing declares the runner (no chart seed):
-  the host of RTE_URL, with the port when it is not 8000, as the app names it.
-*/}}
-{{- define "ansibleforms.rte.selfName" -}}
-{{- $port := toString (include "ansibleforms.rte.port" .) -}}
-{{- if eq $port "8000" -}}127.0.0.1{{- else -}}{{- printf "127.0.0.1-%s" $port -}}{{- end -}}
-{{- end -}}
-
-{{- /*
   The token is kept apart from <release>-secrets on purpose. That Secret may be one the
   user manages (secrets.existingSecret), and asking everybody who does to add a key before
   the next upgrade would turn a new feature into a broken rollout. It lives in
@@ -529,14 +520,22 @@ app.kubernetes.io/component: database
 {{- define "ansibleforms.rte.seed" -}}
 {{- $rte := dig "rte" (dict) (.Values.containers | default dict) -}}
 # Written by the AnsibleForms Helm chart: the RTE in the server pod, as the default runner.
-# The token is read from the environment when the seed is applied.
+# The app dials it (inbound) and signs in with the credential below, whose token is read
+# from the environment when the seed is applied.
 version: 1
+credentials:
+  items:
+    - name: {{ $rte.runnerName | default "rte" | quote }}
+      credential_type: rte
+      description: "The RTE_TOKEN of the RTE in the server pod, and its address"
+      url: {{ include "ansibleforms.rte.url" . | quote }}
+      password: "${RTE_TOKEN}"
 runners:
   items:
     - name: {{ $rte.runnerName | default "rte" | quote }}
       type: rte
+      rte_mode: inbound
       description: "The RTE in the server pod, from the Helm chart"
-      uri: {{ include "ansibleforms.rte.url" . | quote }}
-      token: "${RTE_TOKEN}"
+      credential: {{ $rte.runnerName | default "rte" | quote }}
       is_default: true
 {{- end -}}

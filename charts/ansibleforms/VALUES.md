@@ -60,7 +60,7 @@ values.yaml itself and in the [README](README.md).
 | containers.rte.port | int | `8000` | Port the RTE listens on inside the pod. Any free port above 1024. |
 | containers.rte.resources | object | `{"limits":{"cpu":"2","memory":"2048Mi"},"requests":{"cpu":"250m","memory":"256Mi"}}` | RTE resources. |
 | containers.rte.runnerName | string | `"rte"` | Name of the runner the seed creates. |
-| containers.rte.seedRunner | bool | `true` | Register the RTE as the app's default runner through a config seed. Off, the RTE adds itself as runner 127.0.0.1. |
+| containers.rte.seedRunner | bool | `true` | Register the RTE as the app's default runner through a config seed. Off, add the runner yourself (the NOTES show how). |
 | containers.rte.startup | object | `{"failureThreshold":60,"initialDelaySeconds":5,"periodSeconds":5,"timeoutSeconds":5}` | RTE startup probe (HTTP /ready); failureThreshold x periodSeconds is the budget. |
 | containers.server.affinity | object | `{}` | Server pod affinity. |
 | containers.server.bindPrivilegedPorts | bool | `true` | Let the non-root server bind ports 80 and 443 (sets net.ipv4.ip_unprivileged_port_start). |

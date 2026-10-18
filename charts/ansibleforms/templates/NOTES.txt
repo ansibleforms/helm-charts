@@ -69,34 +69,33 @@ About ENCRYPTION_SECRET
   it just quietly turns them into rubbish. Take a backup and re-enter them.
 {{ end }}
 {{- if eq (include "ansibleforms.rte.enabled" .) "true" }}
-{{- $rteRegister := toString (dig "rte" "env" "RTE_REGISTER" "" (.Values.applications | default dict)) }}
-{{- range $e := (dig "rte" "extraEnv" (list) (.Values.containers | default dict)) }}
-{{- if eq (toString $e.name) "RTE_REGISTER" }}{{ $rteRegister = toString $e.value }}{{ end }}
-{{- end }}
 Running playbooks
 
   Playbooks run on the RTE in the server pod ({{ dig "rte" "image" "" (.Values.containers | default dict) }}).
+  The app dials it on {{ include "ansibleforms.rte.url" . }} and keeps one WebSocket open (inbound).
 {{- if eq (include "ansibleforms.rte.seedEnabled" .) "true" }}
   The chart registered it as the default runner, "{{ dig "rte" "runnerName" "rte" (.Values.containers | default dict) }}", under Connections > Runners.
-{{- else if eq $rteRegister "0" }}
-  RTE_REGISTER is 0, so it does not add itself as a runner. Add it under
-  Connections > Runners: type RTE, uri {{ include "ansibleforms.rte.url" . }}, tick Default,
-  and the token from:
+{{- else }}
+  Add it under Connections > Runners: type RTE, mode inbound, with an RTE credential of
+  Connections > Credentials holding the address {{ include "ansibleforms.rte.url" . }} and the token from:
 
     kubectl -n {{ .Release.Namespace }} get secret {{ include "ansibleforms.rte.tokenSecretName" . }} -o jsonpath='{.data.{{ include "ansibleforms.rte.tokenSecretKey" . }}}' | base64 -d
-{{- else }}
-  It adds itself under Connections > Runners as "{{ include "ansibleforms.rte.selfName" . }}" ({{ include "ansibleforms.rte.url" . }}),
-  the default unless another RTE runner already is, and keeps that one row across restarts.
 {{- if eq (include "ansibleforms.rte.userSeed" .) "true" }}
-  CONFIG_SEED_PATH points at a seed of your own: to declare the runner there
-  instead, with a name of your choice, add it to that seed:
 
+  CONFIG_SEED_PATH points at a seed of your own: you can declare it there instead:
+
+    credentials:
+      items:
+        - name: rte
+          credential_type: rte
+          url: {{ include "ansibleforms.rte.url" . }}
+          password: ${RTE_TOKEN}
     runners:
       items:
         - name: rte
           type: rte
-          uri: {{ include "ansibleforms.rte.url" . }}
-          token: ${RTE_TOKEN}
+          rte_mode: inbound
+          credential: rte
           is_default: true
 {{- end }}
 {{- end }}

@@ -551,9 +551,10 @@ containers:
   # The RTE, the runtime environment that runs the playbooks. It is a second container in
   # the server pod rather than a Deployment of its own: it needs the app's volume (the
   # playbooks, repositories, uploads and SSH key), and the volume is ReadWriteOnce. The app
-  # reaches it on 127.0.0.1. No Service publishes its port, but it listens on the pod's
-  # address like any container, so other pods can reach it there: its jobs API needs the
-  # token, /live and /ready answer anybody, and /metrics only with METRICS_TOKEN.
+  # dials it on 127.0.0.1 and keeps one WebSocket open (inbound): the RTE gets no database
+  # settings. No Service publishes its port, but it listens on the pod's address like any
+  # container, so other pods can reach it there: its socket needs the token, /live and
+  # /ready answer anybody, and /metrics only with METRICS_TOKEN.
   # networkPolicy.server keeps other pods to the app's port.
   #
   # The image is where your playbooks' dependencies live: collections, Python libraries,
@@ -570,19 +571,16 @@ containers:
     # -- Port the RTE listens on inside the pod. Any free port above 1024.
     port: 8000
 
-    # The chart registers the RTE with the app through a config seed: a runner named after
-    # runnerName, type rte, on http://127.0.0.1:<port>, with the token, ticked as the
-    # default. The seed re-applies it on every start, so the runner is read-only in the
-    # interface. The RTE gets the same address as RTE_URL, so it recognises that runner as
-    # its own and adds no other.
+    # The chart registers the RTE with the app through a config seed: an RTE credential with
+    # the token and http://127.0.0.1:<port>, and a runner named after runnerName, type rte,
+    # mode inbound, signing in with it, ticked as the default. The seed re-applies them on
+    # every start, so they are read-only in the interface.
     #
     # With seedRunner off, or a config seed of your own (CONFIG_SEED_PATH set in
-    # applications.server.env or containers.server.extraEnv), the RTE adds itself instead:
-    # one runner named 127.0.0.1 (127.0.0.1-<port> off 8000), on that same address, kept
-    # across restarts and the default unless another RTE runner is. Add the runner to your
-    # own seed, with token: ${RTE_TOKEN}, to name it yourself. RTE_REGISTER: "0" in
-    # applications.rte.env turns that off, and then the runner is added by hand.
-    # -- Register the RTE as the app's default runner through a config seed. Off, the RTE adds itself as runner 127.0.0.1.
+    # applications.server.env or containers.server.extraEnv), add the runner yourself: in
+    # your seed (the chart's NOTES show how, with password: ${RTE_TOKEN}), or under
+    # Connections > Runners with an RTE credential holding that address and the token.
+    # -- Register the RTE as the app's default runner through a config seed. Off, add the runner yourself (the NOTES show how).
     seedRunner: true
     # -- Name of the runner the seed creates.
     runnerName: rte

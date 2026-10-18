@@ -365,10 +365,11 @@ spec:
         {{- if $rteOn }}
         {{- /*
           The RTE runs the playbooks. Same pod as the app, so it sees the same volume
-          (playbooks, repositories, uploads, the SSH key) and the app reaches it on
-          127.0.0.1. It reads the job from the database, so it gets the app's database
-          settings and ENCRYPTION_SECRET. Its jobs API answers only calls carrying
-          RTE_TOKEN; /live and /ready need none, /metrics needs METRICS_TOKEN.
+          (playbooks, repositories, uploads, the SSH key) and takes the job's files from it
+          (RTE_FILES=local). The app dials it on 127.0.0.1 with RTE_TOKEN and keeps one
+          WebSocket open (RTE_MODE=inbound): the job, its output and its events go through
+          it, so the RTE gets no database settings and no ENCRYPTION_SECRET. /live and
+          /ready need no token, /metrics needs METRICS_TOKEN.
         */}}
         - name: rte
           image: {{ $rte.image | required "containers.rte.image is required while containers.rte.enabled is true" }}
@@ -401,29 +402,15 @@ spec:
             - name: RTE_URL
               value: {{ include "ansibleforms.rte.url" . | quote }}
 
-            - name: DB_HOST
-              value: {{ include "ansibleforms.mysql.host" . | quote }}
+            - name: NODE_ENV
+              value: "production"
 
-            - name: DB_PORT
-              value: {{ $appMysql.port | default "3306" | quote }}
+            {{- /* The app dials it and keeps one socket open; its files are the app's own */}}
+            - name: RTE_MODE
+              value: "inbound"
 
-            - name: DB_USER
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $secretName }}
-                  key: DB_USER
-
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $secretName }}
-                  key: DB_PASSWORD
-
-            - name: ENCRYPTION_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $secretName }}
-                  key: ENCRYPTION_SECRET
+            - name: RTE_FILES
+              value: "local"
 
             - name: RTE_TOKEN
               valueFrom:
