@@ -1083,6 +1083,13 @@ jobs:
           kubectl -n upgrade describe pods || true
           kubectl -n upgrade logs --all-containers --tail=200 \
             --selector app.kubernetes.io/component=server || true
+          # the app's and the RTE's own words: a pod that never gets ready (a refused config
+          # seed, an image that does not exist) shows up here, not in helm's "context deadline"
+          kubectl -n upgrade get events --sort-by=.lastTimestamp | tail -60 || true
+          kubectl logs --all-containers --tail=200 --prefix \
+            --selector app.kubernetes.io/component=server -n upgrade || true
+          kubectl logs --all-containers --tail=100 --prefix --previous \
+            --selector app.kubernetes.io/component=server -n upgrade || true
 
   # kind has no ingress controller, so until now the Ingress was rendered,
   # validated against the schema and never asked for a single page. A port bug
@@ -1208,6 +1215,15 @@ jobs:
         run: |
           kubectl get ingress -A || true
           kubectl -n traefik logs deployment/traefik --tail=100 || true
+          kubectl get pods -A || true
+          kubectl describe pods -A --selector app.kubernetes.io/component=server || true
+          # the app's and the RTE's own words: a pod that never gets ready (a refused config
+          # seed, an image that does not exist) shows up here, not in helm's "context deadline"
+          kubectl get events -A --sort-by=.lastTimestamp | tail -60 || true
+          kubectl logs --all-containers --tail=200 --prefix \
+            --selector app.kubernetes.io/component=server --all-namespaces || true
+          kubectl logs --all-containers --tail=100 --prefix --previous \
+            --selector app.kubernetes.io/component=server --all-namespaces || true
 
   # NetworkPolicy is enforced by the CNI, and kind ships kindnet, which does not
   # enforce it. A policy test on a default cluster would pass while proving
@@ -1306,6 +1322,13 @@ jobs:
         run: |
           kubectl -n np get all,networkpolicy || true
           kubectl -n np describe pods || true
+          # the app's and the RTE's own words: a pod that never gets ready (a refused config
+          # seed, an image that does not exist) shows up here, not in helm's "context deadline"
+          kubectl -n np get events --sort-by=.lastTimestamp | tail -60 || true
+          kubectl logs --all-containers --tail=200 --prefix \
+            --selector app.kubernetes.io/component=server -n np || true
+          kubectl logs --all-containers --tail=100 --prefix --previous \
+            --selector app.kubernetes.io/component=server -n np || true
 
   # The one check the branch rules require. Requiring the jobs one by one would tie the
   # rules to the matrix job names, which change whenever the Kubernetes versions move,
