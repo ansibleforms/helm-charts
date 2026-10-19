@@ -365,10 +365,11 @@ spec:
         {{- if $rteOn }}
         {{- /*
           The RTE runs the playbooks. Same pod as the app, so it sees the same volume
-          (playbooks, repositories, uploads, the SSH key) and the app reaches it on
-          127.0.0.1. It reads the job from the database, so it gets the app's database
-          settings and ENCRYPTION_SECRET. Its jobs API answers only calls carrying
-          RTE_TOKEN; /live and /ready need none, /metrics needs METRICS_TOKEN.
+          (playbooks, repositories, uploads, the SSH key) and takes the job's files from it
+          (RTE_FILES=local). The app dials it on 127.0.0.1 with RTE_TOKEN and keeps one
+          WebSocket open (RTE_MODE=inbound): the job, its output and its events go through
+          it, so the RTE gets no database settings and no ENCRYPTION_SECRET. /live and
+          /ready need no token, /metrics needs METRICS_TOKEN.
         */}}
         - name: rte
           image: {{ $rte.image | required "containers.rte.image is required while containers.rte.enabled is true" }}
@@ -394,36 +395,20 @@ spec:
               value: "0"
 
             {{- /*
-              The address it registers itself under (Connections > Runners): the one the seed
-              declares, so the seeded runner and the RTE are one row. Without the seed it is a
-              stable row of its own, instead of a new one on the pod IP at every start.
+              No RTE_URL and no APP_URL: an inbound RTE uses them only to register itself
+              with the app, and the seed declares the runner instead. With RTE_URL on plain
+              http it would also warn at every start that the token goes in clear, which
+              over 127.0.0.1 inside the pod it never leaves.
             */}}
-            - name: RTE_URL
-              value: {{ include "ansibleforms.rte.url" . | quote }}
+            - name: NODE_ENV
+              value: "production"
 
-            - name: DB_HOST
-              value: {{ include "ansibleforms.mysql.host" . | quote }}
+            {{- /* The app dials it and keeps one socket open; its files are the app's own */}}
+            - name: RTE_MODE
+              value: "inbound"
 
-            - name: DB_PORT
-              value: {{ $appMysql.port | default "3306" | quote }}
-
-            - name: DB_USER
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $secretName }}
-                  key: DB_USER
-
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $secretName }}
-                  key: DB_PASSWORD
-
-            - name: ENCRYPTION_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $secretName }}
-                  key: ENCRYPTION_SECRET
+            - name: RTE_FILES
+              value: "local"
 
             - name: RTE_TOKEN
               valueFrom:
@@ -460,10 +445,9 @@ spec:
                 - ALL
 
           {{- /*
-            /ready and /live need no token (the jobs API does). Ready means the database
-            answers and the app's schema is there, which on a first install comes after the
-            app has created it: the startup budget matches the app's. Plain HTTP, since the
-            chart sets HTTPS=0 on it above.
+            /ready and /live need no token (the socket does). Inbound, ready means the RTE
+            listens and is not stopping: it reads no database, so it is ready at once.
+            Plain HTTP, since the chart sets HTTPS=0 on it above.
           */}}
           startupProbe:
             httpGet:

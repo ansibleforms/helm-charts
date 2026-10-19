@@ -1047,6 +1047,18 @@ jobs:
           # tried it. Revision 1 is the published chart this started from, so
           # this walks the whole change backwards, security contexts, volume
           # ownership and all.
+          #
+          # Only within one app minor version: a new minor (7.2 to 7.3) upgrades
+          # the database schema on its first start, and the older app cannot run
+          # on it. Going back across that takes the backup the app made before the
+          # upgrade, restored, which no helm rollback does - so it is not tried.
+          app_prev="$(helm show chart ansibleforms/ansibleforms --version "$PREV" | awk '/^appVersion:/ {gsub(/"/, "", $2); print $2}')"
+          app_here="$(helm show chart . | awk '/^appVersion:/ {gsub(/"/, "", $2); print $2}')"
+          if [ "${app_prev%.*}" != "${app_here%.*}" ]; then
+            echo "No rollback: the app goes from $app_prev to $app_here, a new minor version whose"
+            echo "schema the older app cannot read. Restore the backup made before the upgrade instead."
+            exit 0
+          fi
           echo "Rolling back to revision 1, which is $PREV"
           helm rollback upg 1 --namespace "$NS" --wait --timeout 12m
 
@@ -1083,6 +1095,13 @@ jobs:
           kubectl -n upgrade describe pods || true
           kubectl -n upgrade logs --all-containers --tail=200 \
             --selector app.kubernetes.io/component=server || true
+          # the app's and the RTE's own words: a pod that never gets ready (a refused config
+          # seed, an image that does not exist) shows up here, not in helm's "context deadline"
+          kubectl -n upgrade get events --sort-by=.lastTimestamp | tail -60 || true
+          kubectl logs --all-containers --tail=200 --prefix \
+            --selector app.kubernetes.io/component=server -n upgrade || true
+          kubectl logs --all-containers --tail=100 --prefix --previous \
+            --selector app.kubernetes.io/component=server -n upgrade || true
 
   # kind has no ingress controller, so until now the Ingress was rendered,
   # validated against the schema and never asked for a single page. A port bug
@@ -1185,7 +1204,7 @@ jobs:
               exit 1
             fi
             case "$body" in
-              *"Ansible Forms"*) echo "  the page served is AnsibleForms" ;;
+              *"AnsibleForms"* | *"Ansible Forms"*) echo "  the page served is AnsibleForms" ;;
               *) echo "::error::Something answered 200 but it was not the application."; exit 1 ;;
             esac
             helm uninstall ing --namespace "$ns" >/dev/null
@@ -1208,6 +1227,15 @@ jobs:
         run: |
           kubectl get ingress -A || true
           kubectl -n traefik logs deployment/traefik --tail=100 || true
+          kubectl get pods -A || true
+          kubectl describe pods -A --selector app.kubernetes.io/component=server || true
+          # the app's and the RTE's own words: a pod that never gets ready (a refused config
+          # seed, an image that does not exist) shows up here, not in helm's "context deadline"
+          kubectl get events -A --sort-by=.lastTimestamp | tail -60 || true
+          kubectl logs --all-containers --tail=200 --prefix \
+            --selector app.kubernetes.io/component=server --all-namespaces || true
+          kubectl logs --all-containers --tail=100 --prefix --previous \
+            --selector app.kubernetes.io/component=server --all-namespaces || true
 
   # NetworkPolicy is enforced by the CNI, and kind ships kindnet, which does not
   # enforce it. A policy test on a default cluster would pass while proving
@@ -1306,6 +1334,13 @@ jobs:
         run: |
           kubectl -n np get all,networkpolicy || true
           kubectl -n np describe pods || true
+          # the app's and the RTE's own words: a pod that never gets ready (a refused config
+          # seed, an image that does not exist) shows up here, not in helm's "context deadline"
+          kubectl -n np get events --sort-by=.lastTimestamp | tail -60 || true
+          kubectl logs --all-containers --tail=200 --prefix \
+            --selector app.kubernetes.io/component=server -n np || true
+          kubectl logs --all-containers --tail=100 --prefix --previous \
+            --selector app.kubernetes.io/component=server -n np || true
 
   # The one check the branch rules require. Requiring the jobs one by one would tie the
   # rules to the matrix job names, which change whenever the Kubernetes versions move,

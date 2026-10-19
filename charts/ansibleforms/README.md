@@ -581,13 +581,16 @@ and says which value to set, as it does for `secrets.generate`.
 AnsibleForms 7 runs no playbook in the app: every playbook runs on an RTE (runtime
 environment), `ghcr.io/ansibleforms/ansibleforms-rte-full`. The chart runs one as a second
 container in the server pod. It shares the app's volume, so it sees the same playbooks,
-repositories, uploads and SSH key, and the app reaches it on `127.0.0.1:8000`. No Service
-publishes that port, but it listens on the pod's address like any container, so other pods
-can reach it there: its jobs API needs the token, `/live` and `/ready` answer anybody, and
-`/metrics` answers only with `METRICS_TOKEN`. `networkPolicy.server` keeps other pods to the
+repositories, uploads and SSH key. The app dials it on `127.0.0.1:8000` and keeps one
+WebSocket open (`RTE_MODE=inbound`): the job, its output and its events go through it, so
+the RTE gets no database settings and no encryption key. No Service publishes that port, but
+it listens on the pod's address like any container, so other pods can reach it there: its
+socket needs the token, `/live` and `/ready` answer anybody, and `/metrics` answers only with
+`METRICS_TOKEN`. `networkPolicy.server` keeps other pods to the
 app's port.
 
-The chart also registers it for you. A config seed creates a runner named `rte`, type RTE,
+The chart also registers it for you. A config seed creates an RTE credential with the token
+and the address, and a runner named `rte`, type RTE, mode inbound, signing in with it and
 ticked as the default, so a playbook form runs on it without any setup. The seed re-applies
 it on every start, which is why the runner is read-only under Connections > Runners.
 
@@ -611,31 +614,35 @@ collections. When yours need more, or less, build your own on one of the publish
 [examples/rte](https://github.com/ansibleforms/ansibleforms/tree/main/examples/rte) has Dockerfiles to start from. Point `containers.rte.image` at it. Keep its release on the app's, or on one with the same
 RTE contract: Test connection under Connections > Runners shows both.
 
-**The token.** The app sends it with every call and the RTE runs no job without it. Left
-empty, the chart generates one on the first install and keeps it across upgrades. Argo CD and
-Flux render with `helm template`, where the chart cannot read it back, and a token generated
-on every sync would let the two containers drift apart: after one of them restarts, every
-job is refused with a 401. So there the chart refuses to generate it: set
-`applications.rte.token`, or point `containers.rte.existingTokenSecret` at a Secret you manage.
+**The token.** The app signs in to the RTE's socket with it, and the RTE takes no job
+without it. Left empty, the chart generates one on the first install and keeps it across
+upgrades. Argo CD and Flux render with `helm template`, where the chart cannot read it back,
+and a token generated on every sync would let the two containers drift apart: after one of
+them restarts, the app's socket is refused with a 401 and no job runs. So there the chart
+refuses to generate it: set `applications.rte.token`, or point
+`containers.rte.existingTokenSecret` at a Secret you manage.
 
-The RTE is told that same address as `RTE_URL`, so it recognises the seeded runner as its
-own. With `containers.rte.seedRunner: false` it adds itself instead: one runner named
-`127.0.0.1` (`127.0.0.1-<port>` when the port is not 8000) on `http://127.0.0.1:<port>`, the
-default unless another RTE runner already is, and the same row after every restart.
-`RTE_REGISTER: "0"` under `applications.rte.env` turns that off; add the runner by hand then.
+With `containers.rte.seedRunner: false`, or a config seed of your own, add the runner
+yourself: in your seed, or under Connections > Runners with an RTE credential holding
+`http://127.0.0.1:<port>` and the token. The chart's NOTES show both.
 
 **A config seed of your own.** The app reads one seed, from `CONFIG_SEED_PATH`. When you set
 it, the chart leaves the seed to you and passes the token to the app as `RTE_TOKEN`. The RTE
-then adds itself as above; to declare the runner yourself, with a name of your choice, add it
-to your seed:
+does not add itself, so declare it in your seed, with names of your choice:
 
 ```yaml
+credentials:
+  items:
+    - name: rte
+      credential_type: rte
+      url: http://127.0.0.1:8000
+      password: ${RTE_TOKEN}
 runners:
   items:
     - name: rte
       type: rte
-      uri: http://127.0.0.1:8000
-      token: ${RTE_TOKEN}
+      rte_mode: inbound
+      credential: rte
       is_default: true
 ```
 

@@ -43,7 +43,11 @@ const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application
 const runners = (await (await fetch(`${base}/runner`, { headers })).json()).records || [];
 const rte = runners.find((r) => r.type === "rte" && r.is_default);
 if (!rte) fail(`No default runner of type rte. Runners: ${JSON.stringify(runners)}`);
-console.log(`Runner ${rte.name} on ${rte.uri}, managed: ${rte.managed}`);
+console.log(`Runner ${rte.name}, mode ${rte.rte_mode}, credential ${rte.credential}, managed: ${rte.managed}`);
+// the chart's seed declares it inbound, signing in with an RTE credential : not a 7.2
+// database-mode runner carrying its own uri and token
+if (rte.rte_mode !== "inbound") fail(`The runner is in mode ${rte.rte_mode}, not inbound: ${JSON.stringify(rte)}`);
+if (!rte.credential) fail(`The runner names no credential: ${JSON.stringify(rte)}`);
 const check = await fetch(`${base}/runner/${rte.id}/check`, { method: "POST", headers });
 const checked = await check.json();
 if (!check.ok) fail(`Test connection failed: ${JSON.stringify(checked)}`);
@@ -71,6 +75,7 @@ for (let i = 0; i < 90; i++) {
   console.log(`Job ${launched.id} ended ${job.status}`);
   if (job.status !== "success") fail(`The playbook job ended ${job.status}:\n${output}`);
   if (!output.includes("Running on RTE")) fail(`The job did not run on the RTE:\n${output}`);
+  if (!output.includes("(inbound)")) fail(`The job did not go over the inbound socket:\n${output}`);
   if (!output.includes("RTE says hello-from-ci")) fail(`The playbook output is missing:\n${output}`);
   console.log("The playbook ran on the RTE.");
   process.exit(0);
