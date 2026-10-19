@@ -51,6 +51,57 @@ imagePullSecrets: []
 #   - name: regcred
 
 # ==============================================================================
+# RUNNER MODE
+# ==============================================================================
+# The chart installs AnsibleForms by default: the app, its MySQL and an RTE next to it in
+# the server pod. With runner.enabled it installs only an RTE instead, a Runner that dials
+# an AnsibleForms app installed elsewhere (another namespace, another cluster, a VM) and
+# keeps one WebSocket open to it (RTE_MODE=outbound). The app sends it each job over that
+# socket, with the job's files, and stores what comes back, so the runner needs no
+# database, no encryption key and no inbound port: only its way out to the app's address.
+#
+# What it renders: one Deployment, <release>-rte, a PVC for its spool and job files
+# (<release>-rte-pvc, sized and classed by storages.server), the <release>-keys Secret
+# holding its RTE_TOKEN (generated once and kept, as for the RTE in the server pod, or
+# containers.rte.existingTokenSecret) and the join token, a NetworkPolicy with
+# networkPolicy.enabled, and a helm test that the app answers from the namespace. No app,
+# no MySQL, no Service, no Ingress, no config seed. Every other value of the app is ignored.
+#
+# The container is configured as the RTE in the server pod is: containers.rte (image,
+# resources, probes, extraEnv, extraEnvFrom, extraVolumeMounts) and applications.rte.env
+# (HTTPS_PROXY, NO_PROXY, NODE_EXTRA_CA_CERTS, RTE_MAX_JOBS and so on). The pod takes its
+# scheduling, pull secrets, service account and security context from containers.server.
+#
+# Approval: the first time it joins, an app that does not know it holds it as waiting
+# until an admin approves it under Connections > Runners. A join token made there
+# (runner.joinToken) approves it at once, for an unattended install. From then on it signs
+# in with its own RTE_TOKEN, which the app keeps: keep the <release>-keys Secret with it.
+#
+#   helm install runner1 ansibleforms/ansibleforms --namespace runners --create-namespace \
+#     --set runner.enabled=true \
+#     --set runner.appUrl=https://forms.example.com \
+#     --set runner.joinToken=afj_...
+runner:
+  # -- true installs only an RTE (a Runner) that dials an AnsibleForms app elsewhere: no app, no database, no ingress.
+  enabled: false
+  # The address with its BASE_URL if the app has one. The RTE adds the socket's path to it
+  # and dials it over wss:// (ws:// for an http address).
+  # -- The app's address as people open it (https://forms.example.com). Required with runner.enabled.
+  appUrl: ""
+  # The app knows the runner by this name, and forms name it with runner: <name>, so it
+  # has to stay the same across restarts. Letters, digits and . _ - : @ only.
+  # -- The runner name it joins as (RTE_NAME). Empty: the release name.
+  name: ""
+  # Read on the first start only: once approved, the runner signs in with its own token and
+  # the join token may expire or be revoked. It goes into the <release>-keys Secret, so it
+  # passes through the release history Helm keeps; make it single-use (maxUses 1).
+  # -- A join token made in the app (Connections > Runners), used on the first start to be approved at once. Empty: it waits for an admin's approval.
+  joinToken: ""
+  # With true, a private CA is named through NODE_EXTRA_CA_CERTS in applications.rte.env.
+  # -- false accepts the app's self-signed certificate (APP_TLS_VERIFY=0), inside one trusted network only.
+  appTlsVerify: true
+
+# ==============================================================================
 # MYSQL DEPLOYMENT
 # ==============================================================================
 # Whether the chart deploys its own MySQL. Turn it off to point AnsibleForms at

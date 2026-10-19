@@ -1,3 +1,5 @@
+{{- /* The app's, so nothing in runner mode (runner.enabled): the app runs elsewhere */}}
+{{- if ne (include "ansibleforms.runner.enabled" .) "true" }}
 {{- $serverSvc := .Values.services.server | default dict }}
 {{- $serverLb := $serverSvc.loadbalancer | default dict }}
 {{- $mysqlSvc := .Values.services.mysql | default dict }}
@@ -60,4 +62,5 @@ spec:
       protocol: TCP
   selector:
     {{- include "ansibleforms.mysql.selectorLabels" . | nindent 4 }}
+{{- end }}
 {{- end }}

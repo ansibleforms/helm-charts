@@ -1,0 +1,73 @@
+{{- /*
+  The helm test of runner mode. The runner itself has no Service to call, and whether it
+  joined shows under Connections > Runners in the app. What this checks is the half a
+  cluster gets wrong: that the app at runner.appUrl answers from this namespace, through the
+  DNS, the proxies and the egress rules the runner's own socket goes through. The app's
+  /api/v2/live needs no login.
+*/}}
+{{- if eq (include "ansibleforms.runner.enabled" .) "true" }}
+{{- $tests := (.Values.tests | default dict) }}
+{{- if dig "enabled" true $tests }}
+{{- $runner := (.Values.runner | default dict) }}
+{{- $insecure := and (hasKey $runner "appTlsVerify") (has (toString $runner.appTlsVerify) (list "false" "0")) }}
+{{- $url := printf "%s/api/v2/live" (include "ansibleforms.runner.appUrl" .) }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "ansibleforms.fullname" . }}-test-runner
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ansibleforms.labels" . | nindent 4 }}
+    app.kubernetes.io/name: {{ include "ansibleforms.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    {{- /* before-hook-creation only, as the app's test: the pod stays for helm test --logs */}}
+    helm.sh/hook-delete-policy: before-hook-creation
+    {{- with (include "ansibleforms.annotations" .) }}
+    {{- . | nindent 4 }}
+    {{- end }}
+spec:
+  restartPolicy: Never
+  {{- with (include "ansibleforms.podScheduling" (dict "component" ($tests) "root" $)) }}
+  {{- . | nindent 2 }}
+  {{- end }}
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: {{ dig "runAsUser" 100 $tests }}
+    runAsGroup: {{ dig "runAsGroup" 100 $tests }}
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: test
+      image: {{ dig "image" "curlimages/curl:8.10.1" $tests }}
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+      resources:
+        limits:
+          cpu: 100m
+          memory: 64Mi
+        requests:
+          cpu: 10m
+          memory: 16Mi
+      command:
+        - sh
+        - -c
+        - |
+          set -eu
+          echo "Asking the app at {{ $url }}"
+          code="$(curl -s{{ if $insecure }}k{{ end }} -o /tmp/body -w '%{http_code}' --max-time 20 '{{ $url }}' || echo 000)"
+          echo "  HTTP $code"
+          [ "$code" = "200" ] || {
+            echo "The app did not answer 200 from this namespace, so the runner cannot reach it either."
+            head -20 /tmp/body 2>/dev/null || true
+            exit 1
+          }
+          echo "OK: the runner's app answers from here. Check it joined under Connections > Runners."
+{{- end }}
+{{- end }}

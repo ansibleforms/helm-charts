@@ -60,6 +60,43 @@
         "type": "object"
       }
     },
+    "runner": {
+      "description": "Runner mode: only an RTE that dials an AnsibleForms app installed elsewhere (RTE_MODE=outbound).",
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "appUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "joinToken": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "appTlsVerify": {
+          "type": [
+            "boolean",
+            "integer",
+            "string"
+          ]
+        }
+      }
+    },
     "mysql": {
       "type": [
         "object",

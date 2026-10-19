@@ -154,6 +154,107 @@ jobs:
               sys.exit("::error::The chart is not refusing what it should, or not explaining why.")
           PY
 
+      # Runner mode installs an RTE on its own, dialing an app installed elsewhere. It must
+      # render the runner and nothing of the app: a stray Service, Ingress or MySQL beside a
+      # runner would be a second, empty AnsibleForms nobody asked for. The test values file
+      # carries every runner option; the bare one is runner.enabled with the app's address
+      # and nothing else, over the defaults (placeholder credentials and the Ingress on).
+      - name: Runner mode renders the runner and nothing of the app
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess, sys, yaml
+
+          def render(*args):
+              out = subprocess.run(["helm", "template", "rn", ".", *args],
+                                   capture_output=True, text=True)
+              if out.returncode:
+                  sys.exit(f"::error::Runner mode did not render with {args}:\n{out.stderr}")
+              return [d for d in yaml.safe_load_all(out.stdout) if d]
+
+          def env_of(container):
+              return {e["name"]: e for e in container.get("env", [])}
+
+          failures = []
+          cases = {
+              "test values": ["--values", "../../test/values/runner-values.yaml"],
+              "bare": ["--set", "runner.enabled=true",
+                       "--set", "runner.appUrl=https://forms.example.com",
+                       "--set", "applications.rte.token=ci-not-a-real-rte-token"],
+              "own token Secret": ["--set", "runner.enabled=true",
+                                   "--set", "runner.appUrl=http://forms.example.com",
+                                   "--set", "containers.rte.existingTokenSecret=my-rte-token"],
+          }
+          for case, args in cases.items():
+              docs = render(*args)
+              kinds = sorted(f"{d['kind']}/{d['metadata']['name']}" for d in docs)
+              print(f"{case}: {kinds}")
+              allowed = {"Deployment/rn-rte", "PersistentVolumeClaim/rn-rte-pvc", "Secret/rn-keys",
+                         "NetworkPolicy/rn-rte", "Pod/rn-test-runner"}
+              for k in kinds:
+                  if k not in allowed:
+                      failures.append(f"{case}: {k} rendered in runner mode")
+              for k in ("Deployment/rn-rte", "PersistentVolumeClaim/rn-rte-pvc", "Pod/rn-test-runner"):
+                  if k not in kinds:
+                      failures.append(f"{case}: {k} is missing")
+
+              dep = next((d for d in docs if d["kind"] == "Deployment"), None)
+              if not dep:
+                  continue
+              spec = dep["spec"]
+              if spec.get("replicas") != 1 or spec["strategy"]["type"] != "Recreate":
+                  failures.append(f"{case}: replicas {spec.get('replicas')}, strategy {spec['strategy']}")
+              pod = spec["template"]["spec"]
+              if [c["name"] for c in pod["containers"]] != ["rte"]:
+                  failures.append(f"{case}: containers {[c['name'] for c in pod['containers']]}, expected only rte")
+              c = pod["containers"][0]
+              env = env_of(c)
+              if env.get("RTE_MODE", {}).get("value") != "outbound":
+                  failures.append(f"{case}: RTE_MODE is {env.get('RTE_MODE')}")
+              for leaked in ("DB_HOST", "DB_USER", "DB_PASSWORD", "ENCRYPTION_SECRET", "LISTEN_HOST"):
+                  if leaked in env:
+                      failures.append(f"{case}: the runner gets {leaked}")
+              for probe in ("startupProbe", "readinessProbe", "livenessProbe"):
+                  if probe not in c:
+                      failures.append(f"{case}: {probe} is missing")
+              if c.get("readinessProbe", {}).get("httpGet", {}).get("path") != "/ready":
+                  failures.append(f"{case}: the readiness probe does not ask /ready")
+              mounts = {m["mountPath"] for m in c.get("volumeMounts", [])}
+              if "/app/dist/persistent" not in mounts:
+                  failures.append(f"{case}: /app/dist/persistent is not on the volume")
+              token = env.get("RTE_TOKEN", {}).get("valueFrom", {}).get("secretKeyRef", {})
+              want = "my-rte-token" if case == "own token Secret" else "rn-keys"
+              if token.get("name") != want:
+                  failures.append(f"{case}: RTE_TOKEN comes from {token}, expected {want}")
+
+              if case == "test values":
+                  want_env = {"APP_URL": "https://forms.ci.example.com", "RTE_NAME": "ci-runner",
+                              "APP_TLS_VERIFY": "0", "RTE_MAX_JOBS": "2"}
+                  for k, v in want_env.items():
+                      if env.get(k, {}).get("value") != v:
+                          failures.append(f"{case}: {k} is {env.get(k)}, expected {v}")
+                  join = env.get("RTE_JOIN_TOKEN", {}).get("valueFrom", {}).get("secretKeyRef", {})
+                  if join != {"name": "rn-keys", "key": "RTE_JOIN_TOKEN"}:
+                      failures.append(f"{case}: RTE_JOIN_TOKEN comes from {join}")
+                  keys = next(d for d in docs if d["kind"] == "Secret")
+                  if sorted(keys["data"]) != ["RTE_JOIN_TOKEN", "RTE_TOKEN"]:
+                      failures.append(f"{case}: the keys Secret holds {sorted(keys['data'])}")
+              else:
+                  if env.get("RTE_NAME", {}).get("value") != "rn":
+                      failures.append(f"{case}: RTE_NAME is {env.get('RTE_NAME')}, expected the release name")
+                  if "RTE_JOIN_TOKEN" in env:
+                      failures.append(f"{case}: RTE_JOIN_TOKEN is set without runner.joinToken")
+                  if env.get("APP_TLS_VERIFY", {}).get("value") != "1":
+                      failures.append(f"{case}: APP_TLS_VERIFY is {env.get('APP_TLS_VERIFY')}, expected 1")
+              if case == "own token Secret" and "Secret/rn-keys" in kinds:
+                  failures.append(f"{case}: a keys Secret rendered with nothing to hold")
+
+          if failures:
+              print("\n".join(failures))
+              sys.exit("::error::Runner mode renders the wrong objects.")
+          print("Runner mode renders the runner, its volume, its keys and its test, and nothing of the app.")
+          PY
+
       # appVersion and the default image are two places saying the same thing,
       # and nothing kept them together. Bump one and forget the other and the
       # chart reports a version it does not deploy, which is the sort of thing
@@ -734,6 +835,77 @@ jobs:
             echo "::error::The app runs without ACCESS_TOKEN_SECRET: every restart signs everybody out."
             exit 1
           fi
+          # Left running: the next step installs a Runner on its own that joins it
+
+      # Runner mode: an RTE on its own (runner.enabled), installed in a namespace of its own
+      # that enforces the restricted Pod Security Standard, dialing the app installed by the
+      # step above. Ready is not enough, since the pod is ready once the app welcomed it,
+      # approved or not: the app's own list of runners has to show it approved and its socket
+      # open. Both ways in: a join token made through the app's API approves one at once, and
+      # one without waits until the admin approves it.
+      - name: A Runner installed on its own joins the app
+        run: |
+          set -euo pipefail
+          app="http://rte-server.rte.svc.cluster.local"
+          pod="$(kubectl -n rte get pod -l app.kubernetes.io/component=server -o jsonpath='{.items[0].metadata.name}')"
+          kubectl -n rte cp ../../test/e2e/runner-join.mjs "$pod:/tmp/runner-join.mjs" -c server
+          api() { kubectl -n rte exec "$pod" -c server -- node /tmp/runner-join.mjs "$@"; }
+
+          kubectl create namespace runners
+          kubectl label namespace runners \
+            pod-security.kubernetes.io/enforce=restricted \
+            pod-security.kubernetes.io/enforce-version=latest
+          runner() {
+            helm install "$1" . --namespace runners \
+              --set runner.enabled=true \
+              --set runner.appUrl="$app" \
+              --set runner.name="$2" \
+              --set storages.server.size=1Gi \
+              --set storages.server.accessMode=ReadWriteOnce \
+              "${@:3}" \
+              --wait --timeout 8m
+          }
+
+          echo "::group::with a join token, approved at once"
+          join="$(api jointoken ci-join | tail -1)"
+          runner joined ci-joined --set runner.joinToken="$join"
+          # Nothing of the app came with it
+          for kind in deployment/joined-server deployment/joined-mysql service/joined-server \
+                      service/joined-mysql secret/joined-secrets ingress/joined-ingress \
+                      pvc/joined-server-pvc pvc/joined-mysql-pvc configmap/joined-rte-seed; do
+            if kubectl -n runners get "$kind" >/dev/null 2>&1; then
+              echo "::error::Runner mode created $kind."
+              exit 1
+            fi
+          done
+          kubectl -n runners get all,pvc,secret
+          kubectl -n runners logs deploy/joined-rte | grep -q "dialing the app at" || {
+            echo "::error::The runner never dialed the app."
+            kubectl -n runners logs deploy/joined-rte --tail=40
+            exit 1; }
+          api connected ci-joined
+          # The token the chart generated, never moved by an upgrade: the app knows the runner by it
+          token="$(kubectl -n runners get secret joined-keys -o jsonpath='{.data.RTE_TOKEN}' | base64 -d)"
+          [ "${#token}" = "32" ] || {
+            echo "::error::The generated RTE_TOKEN is ${#token} characters, not 32."; exit 1; }
+          helm upgrade joined . --namespace runners --reuse-values --wait --timeout 8m >/dev/null
+          [ "$(kubectl -n runners get secret joined-keys -o jsonpath='{.data.RTE_TOKEN}' | base64 -d)" = "$token" ] || {
+            echo "::error::The runner's RTE_TOKEN moved across an upgrade: the app refuses it now."; exit 1; }
+          helm test joined --namespace runners --logs
+          echo "::endgroup::"
+
+          echo "::group::without a join token, approved by the admin"
+          runner waiting ci-waiting
+          kubectl -n runners logs deploy/waiting-rte | grep -q "waiting for an admin to approve it" || {
+            echo "::error::The runner without a join token does not say it waits for approval."
+            kubectl -n runners logs deploy/waiting-rte --tail=40
+            exit 1; }
+          api approve ci-waiting
+          api connected ci-waiting
+          echo "::endgroup::"
+
+          echo "Both runners joined the app, outbound, from a restricted namespace."
+          helm uninstall joined waiting --namespace runners
           helm uninstall rte --namespace rte
 
       # Generation only works where the chart can read the cluster, so it cannot
@@ -886,6 +1058,7 @@ jobs:
           kubectl describe pods --all-namespaces
           kubectl logs --all-containers --tail=200 --selector app.kubernetes.io/component=server --all-namespaces || true
           kubectl logs --all-containers --tail=200 --selector app.kubernetes.io/component=database --all-namespaces || true
+          kubectl logs --all-containers --tail=200 --selector app.kubernetes.io/component=runner --all-namespaces || true
 
   # Every release so far has been an upgrade risk, and nothing here ever ran
   # helm upgrade: the whole suite installs from scratch. A chart that renames a

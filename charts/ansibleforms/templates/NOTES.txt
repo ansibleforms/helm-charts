@@ -1,3 +1,60 @@
+{{- if eq (include "ansibleforms.runner.enabled" .) "true" }}
+{{- $runnerName := include "ansibleforms.runner.name" . }}
+{{- $joinToken := dig "joinToken" "" (.Values.runner | default dict) }}
+An AnsibleForms Runner (an RTE on its own, {{ dig "rte" "image" "" (.Values.containers | default dict) }}) is installed
+as {{ .Release.Name }} in namespace {{ .Release.Namespace }}. It runs no app, no database and no ingress.
+
+Where it dials
+
+  It dials the app at {{ include "ansibleforms.runner.appUrl" . }} and keeps one WebSocket open to it
+  (RTE_MODE=outbound), joining as the runner "{{ $runnerName }}". Nothing has to reach it: it needs only
+  its way out to the app's address, through HTTPS_PROXY if you set one in applications.rte.env.
+{{- if not (hasPrefix "https://" (include "ansibleforms.runner.appUrl" .)) }}
+  An http:// address: the socket and its token go in clear. Use the app's https address outside the cluster.
+{{- else if not (has (toString (dig "appTlsVerify" true (.Values.runner | default dict))) (list "false" "0")) }}
+  The app's certificate is checked: name a private CA with NODE_EXTRA_CA_CERTS in applications.rte.env.
+{{- else }}
+  runner.appTlsVerify is false: it accepts any certificate the app shows. Inside one trusted network only.
+{{- end }}
+
+    kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "ansibleforms.runner.fullname" . }} -f
+
+  "dialing the app at ..." then "connected to the app" say it got there. The pod is Ready once
+  the app has welcomed it on the socket.
+
+How it gets approved
+{{ if $joinToken }}
+  It presents the join token from runner.joinToken on its first start, so the app approves it at
+  once and adds the runner "{{ $runnerName }}". From then on it signs in with its own token, kept in
+  the Secret below: the join token may expire or be revoked without affecting it.
+{{- else }}
+  No runner.joinToken, so it asks to join and waits for an admin: in the app, under
+  Connections > Runners, approve "{{ $runnerName }}" (the bell in the header counts the runners waiting).
+  Its log shows the token's fingerprint, to compare with the one the app shows before approving.
+  For an unattended install, make a join token under Connections > Runners and pass it as
+  runner.joinToken.
+{{- end }}
+
+Seeing it in the app
+
+  Connections > Runners lists "{{ $runnerName }}", type RTE, mode outbound, connected while its socket is
+  open. Forms run on it with runner: {{ $runnerName }}, or tick it as the default runner.
+
+Its token
+
+  It signs in to the app with the RTE_TOKEN in:
+
+    kubectl -n {{ .Release.Namespace }} get secret {{ include "ansibleforms.rte.tokenSecretName" . }} -o jsonpath='{.data.{{ include "ansibleforms.rte.tokenSecretKey" . }}}' | base64 -d
+
+  Keep that Secret: the app knows the runner by it. A new token is refused until an admin approves
+  the runner again.
+
+Checking it works
+
+  helm test {{ .Release.Name }} --namespace {{ .Release.Namespace }}
+
+  checks that the app at {{ include "ansibleforms.runner.appUrl" . }} answers from this namespace.
+{{- else }}
 {{- $https := eq (include "ansibleforms.server.https" .) "true" -}}
 {{- $svc := include "ansibleforms.server.fullname" . -}}
 {{- $scheme := lower (include "ansibleforms.server.scheme" .) -}}
@@ -116,4 +173,5 @@ Database
   the chart deployed no database. AnsibleForms creates its schema there on the
   first start, as long as the database is empty and the user may create tables
   (and the AnsibleForms database, if it does not exist yet).
+{{- end }}
 {{- end }}

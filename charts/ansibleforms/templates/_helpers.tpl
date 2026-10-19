@@ -538,3 +538,65 @@ runners:
       credential: {{ $rte.runnerName | default "rte" | quote }}
       is_default: true
 {{- end -}}
+
+{{- /*
+  Runner mode. With runner.enabled the chart installs an RTE on its own, a Runner that dials
+  an AnsibleForms app installed elsewhere (RTE_MODE=outbound): no app, no database, no
+  Service and no Ingress. Every template of the app checks this helper and renders nothing
+  in that mode, and the runner's own templates render only in it.
+*/}}
+{{- define "ansibleforms.runner.enabled" -}}
+{{- if dig "enabled" false (.Values.runner | default dict) -}}true{{- else -}}false{{- end -}}
+{{- end -}}
+
+{{- /* The runner's Deployment, and the prefix of its claim */}}
+{{- define "ansibleforms.runner.fullname" -}}
+{{- printf "%s-rte" (include "ansibleforms.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "ansibleforms.runner.pvcName" -}}
+{{- printf "%s-rte-pvc" (include "ansibleforms.fullname" .) -}}
+{{- end -}}
+
+{{- /*
+  The runner name it joins as (RTE_NAME): runner.name, else the release name. The app keys
+  the runner on it, so it has to stay the same across restarts, which the RTE's own default
+  (its node id, made of the pod's host name) does not.
+*/}}
+{{- define "ansibleforms.runner.name" -}}
+{{- (.Values.runner | default dict).name | default .Release.Name -}}
+{{- end -}}
+
+{{- /* The app's address, without a slash on the end: the RTE adds the socket's path to it */}}
+{{- define "ansibleforms.runner.appUrl" -}}
+{{- trimSuffix "/" (trim (toString ((.Values.runner | default dict).appUrl | default ""))) -}}
+{{- end -}}
+
+{{- /*
+  What runner mode cannot do without. Refused at render time, with the value to set, rather
+  than a pod that dials nowhere or a name the app refuses on every attempt.
+*/}}
+{{- define "ansibleforms.runner.validate" -}}
+{{- $url := include "ansibleforms.runner.appUrl" . -}}
+{{- if not $url -}}
+{{- fail "\n\nrunner.enabled is true but runner.appUrl is empty.\n\nIn runner mode the chart installs only an RTE, which dials an AnsibleForms app installed elsewhere. Set runner.appUrl to that app's address as people open it, with its BASE_URL if any:\n\n  --set runner.appUrl=https://forms.example.com\n" -}}
+{{- end -}}
+{{- if not (regexMatch "^https?://[^/\\s]+" $url) -}}
+{{- fail (printf "\n\nrunner.appUrl is %q, which is not an http:// or https:// address.\n\nSet it to the app's address as people open it, such as https://forms.example.com.\n" $url) -}}
+{{- end -}}
+{{- $name := include "ansibleforms.runner.name" . -}}
+{{- if not (regexMatch "^[A-Za-z0-9._:@-]+$" $name) -}}
+{{- fail (printf "\n\nrunner.name is %q. A runner name takes letters, digits and . _ - : @ only.\n" $name) -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "ansibleforms.runner.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "ansibleforms.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: runner
+{{- end -}}
+
+{{- define "ansibleforms.runner.labels" -}}
+{{ include "ansibleforms.labels" . }}
+{{ include "ansibleforms.runner.selectorLabels" . }}
+{{- end -}}

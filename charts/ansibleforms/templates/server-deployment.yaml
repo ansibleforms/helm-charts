@@ -1,3 +1,5 @@
+{{- /* The app's, so nothing in runner mode (runner.enabled): the app runs elsewhere */}}
+{{- if ne (include "ansibleforms.runner.enabled" .) "true" }}
 
 {{- $containers := (.Values.containers | default dict) }}
 {{- $app := (.Values.applications | default dict) }}
@@ -520,3 +522,4 @@ spec:
         {{- if .Values.extraVolumes }}
 {{ toYaml .Values.extraVolumes | nindent 8 }}
         {{- end }}
+{{- end }}

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+Released with AnsibleForms 7.3.0.
+
+### Added
+
+- **A Runner on its own, `runner.enabled`.** The chart installs only an RTE that dials an
+  AnsibleForms app installed elsewhere (`RTE_MODE=outbound`, `runner.appUrl`) and joins it
+  as `runner.name`, approved at once with `runner.joinToken` or by an admin under
+  Connections > Runners. It renders the `<release>-rte` Deployment, its volume and its keys
+  Secret, and no app, database, Service or Ingress. `runner.appTlsVerify: false` accepts the
+  app's self-signed certificate.
+
 ## 7.3.0
 
 AnsibleForms 7.3.0.

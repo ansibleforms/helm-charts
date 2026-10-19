@@ -1,0 +1,9 @@
+---
+# Runner mode without the app's address. The RTE would start and dial nowhere, so the
+# chart refuses it and names runner.appUrl.
+runner:
+  enabled: true
+
+applications:
+  rte:
+    token: ci-not-a-real-rte-token
