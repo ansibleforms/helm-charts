@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 7.3.0
 
-Released with AnsibleForms 7.3.0.
+AnsibleForms 7.3.0.
 
 ### Added
 
@@ -12,10 +12,6 @@ Released with AnsibleForms 7.3.0.
   Connections > Runners. It renders the `<release>-rte` Deployment, its volume and its keys
   Secret, and no app, database, Service or Ingress. `runner.appTlsVerify: false` accepts the
   app's self-signed certificate.
-
-## 7.3.0
-
-AnsibleForms 7.3.0.
 
 ### Changed
 
