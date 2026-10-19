@@ -1,3 +1,5 @@
+{{- /* The app's, so nothing in runner mode (runner.enabled): the app runs elsewhere */}}
+{{- if ne (include "ansibleforms.runner.enabled" .) "true" }}
 {{- $tests := (.Values.tests | default dict) }}
 {{- if dig "enabled" true $tests }}
 {{- $scheme := lower (include "ansibleforms.server.scheme" .) }}
@@ -122,4 +124,5 @@ spec:
           {{- end }}
 
           echo "OK"
+{{- end }}
 {{- end }}

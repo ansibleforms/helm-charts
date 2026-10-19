@@ -1,0 +1,240 @@
+{{- /*
+  Runner mode (runner.enabled): an RTE on its own, a Runner that dials an AnsibleForms app
+  installed elsewhere and keeps one WebSocket open to it (RTE_MODE=outbound). It needs no
+  database, no encryption key and no inbound port: the app sends it each job over that
+  socket, with the job's files, and stores what comes back.
+
+  The container is the same one the chart runs next to the app in the server pod: its image,
+  resources, probes and extra env come from containers.rte, its environment from
+  applications.rte.env, and the pod level settings (scheduling, pull secrets, service
+  account, pod security context, runAsUser) from containers.server, exactly as they apply to
+  the RTE in the server pod today.
+*/}}
+{{- if eq (include "ansibleforms.runner.enabled" .) "true" }}
+{{- include "ansibleforms.runner.validate" . }}
+{{- $containers := (.Values.containers | default dict) }}
+{{- $app := (.Values.applications | default dict) }}
+{{- $runner := (.Values.runner | default dict) }}
+{{- $server := ($containers.server | default dict) }}
+{{- $rte := ($containers.rte | default dict) }}
+{{- $rteResources := ($rte.resources | default dict) }}
+{{- $rteLimits := ($rteResources.limits | default dict) }}
+{{- $rteRequests := ($rteResources.requests | default dict) }}
+{{- $rteStartup := ($rte.startup | default dict) }}
+{{- $rteLiveness := ($rte.liveness | default dict) }}
+{{- $rtePort := include "ansibleforms.rte.port" . }}
+{{- /* hasKey, not default: false is the value that matters here, and default drops it */}}
+{{- $tlsVerify := ternary (toString $runner.appTlsVerify) "true" (hasKey $runner "appTlsVerify") }}
+{{- $joinToken := toString ($runner.joinToken | default "") }}
+{{- include "ansibleforms.assertNoRootInitContainer" (dict "component" $server "key" "server") }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ansibleforms.runner.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ansibleforms.runner.labels" . | nindent 4 }}
+  {{- with (include "ansibleforms.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- /*
+    One pod, and Recreate: the pod owns its volume (the spool of what the app has not stored
+    yet), and two RTEs joining under one runner name would take the socket from each other.
+  */}}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "ansibleforms.runner.selectorLabels" . | nindent 6 }}
+
+  strategy:
+    type: Recreate
+
+  template:
+    metadata:
+      labels:
+        {{- include "ansibleforms.runner.labels" . | nindent 8 }}
+        {{- with $server.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- /*
+        The tokens are read once, at the container's start, so a change to either one in
+        values rolls the pod. A generated token is not in values and never moves.
+      */}}
+      {{- $checksums := dict }}
+      {{- if dig "enabled" true (.Values.rollOnChange | default dict) }}
+      {{- $token := toString (dig "rte" "token" "" $app) }}
+      {{- $_ := set $checksums "checksum/keys" (printf "%s|%s" $token $joinToken | sha256sum) }}
+      {{- end }}
+      {{- $podAnn := merge (dict) ($server.podAnnotations | default dict) (.Values.commonAnnotations | default dict) $checksums }}
+      {{- with $podAnn }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ $server.serviceAccountName | default "default" }}
+
+      {{- with (include "ansibleforms.podScheduling" (dict "component" $server "root" $)) }}
+      {{- . | nindent 6 }}
+      {{- end }}
+
+      {{- /*
+        The server's pod security context, which is what the RTE runs under in the server
+        pod: uid 1000 and fsGroup 1000, so the volume belongs to it. No sysctl: the RTE
+        listens above 1024.
+      */}}
+      {{- with $server.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+      {{- with $server.initContainers }}
+      initContainers:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
+
+      containers:
+        - name: rte
+          image: {{ $rte.image | required "containers.rte.image is required in runner mode" }}
+          imagePullPolicy: {{ $rte.imagePullPolicy | default "IfNotPresent" }}
+
+          {{- /* Only the kubelet's probes call it: no Service publishes it */}}
+          ports:
+            - name: rte
+              containerPort: {{ $rtePort }}
+              protocol: TCP
+
+          env:
+            {{- range $key, $value := ((($app.rte | default dict).env) | default dict) }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+            {{- end }}
+
+            {{- /* After the user's env, so these cannot be overridden by accident there */}}
+            - name: PORT
+              value: {{ $rtePort | quote }}
+
+            {{- /* Its listener carries the probes only, inside the pod network: plain HTTP */}}
+            - name: HTTPS
+              value: "0"
+
+            - name: NODE_ENV
+              value: "production"
+
+            {{- /*
+              It dials the app and keeps one socket open, redialing when it drops. No
+              LISTEN_HOST: the kubelet probes the pod's address, which 127.0.0.1 would refuse,
+              so it listens on every interface as any container does. networkPolicy.enabled
+              closes the pod to other pods. RTE_SPOOL_PATH and RTE_CACHE_PATH keep their
+              defaults, under /app/dist/persistent, which is the volume below: a restart sends
+              again what the app had not stored yet.
+            */}}
+            - name: RTE_MODE
+              value: "outbound"
+
+            - name: APP_URL
+              value: {{ include "ansibleforms.runner.appUrl" . | quote }}
+
+            - name: APP_TLS_VERIFY
+              value: {{ ternary "0" "1" (has $tlsVerify (list "false" "0")) | quote }}
+
+            - name: RTE_NAME
+              value: {{ include "ansibleforms.runner.name" . | quote }}
+
+            {{- /* What it signs in with. The app keeps it once an admin or a join token approved it. */}}
+            - name: RTE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ansibleforms.rte.tokenSecretName" . }}
+                  key: {{ include "ansibleforms.rte.tokenSecretKey" . }}
+
+            {{- if $joinToken }}
+            {{- /* Read on the first join only; it may expire or be revoked afterwards */}}
+            - name: RTE_JOIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ansibleforms.keysSecretName" . }}
+                  key: RTE_JOIN_TOKEN
+            {{- end }}
+
+            {{- with $rte.extraEnv }}
+{{ toYaml . | nindent 12 }}
+            {{- end }}
+
+          {{- with $rte.extraEnvFrom }}
+          envFrom:
+{{ toYaml . | nindent 12 }}
+          {{- end }}
+
+          resources:
+            limits:
+              cpu: {{ $rteLimits.cpu | default "2" }}
+              memory: {{ $rteLimits.memory | default "2048Mi" }}
+            requests:
+              cpu: {{ $rteRequests.cpu | default "250m" }}
+              memory: {{ $rteRequests.memory | default "256Mi" }}
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: {{ $server.runAsUser | default 1000 }}
+            runAsGroup: {{ $server.runAsGroup | default 1000 }}
+            capabilities:
+              drop:
+                - ALL
+
+          {{- /*
+            /live answers while the process runs, /ready once the app has welcomed it on the
+            socket (an RTE still waiting for an admin's approval included), and neither needs
+            a token. The startup probe asks /live, so an app that is down or slow to answer
+            holds the pod out of Ready without restarting it; the readiness probe is what
+            helm --wait and kubectl rollout status wait for.
+          */}}
+          startupProbe:
+            httpGet:
+              path: /live
+              port: rte
+              scheme: HTTP
+            initialDelaySeconds: {{ $rteStartup.initialDelaySeconds | default 5 }}
+            periodSeconds: {{ $rteStartup.periodSeconds | default 5 }}
+            timeoutSeconds: {{ $rteStartup.timeoutSeconds | default 5 }}
+            failureThreshold: {{ $rteStartup.failureThreshold | default 60 }}
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: rte
+              scheme: HTTP
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: rte
+              scheme: HTTP
+            periodSeconds: {{ $rteLiveness.periodSeconds | default 30 }}
+            timeoutSeconds: {{ $rteLiveness.timeoutSeconds | default 5 }}
+            failureThreshold: {{ $rteLiveness.failureThreshold | default 3 }}
+
+          volumeMounts:
+            - mountPath: /app/dist/persistent
+              name: rte-persistent-storage
+            {{- with $rte.extraVolumeMounts }}
+{{ toYaml . | nindent 12 }}
+            {{- end }}
+
+      restartPolicy: Always
+
+      volumes:
+        - name: rte-persistent-storage
+          persistentVolumeClaim:
+            claimName: {{ include "ansibleforms.runner.pvcName" . }}
+
+        {{- if .Values.extraVolumes }}
+{{ toYaml .Values.extraVolumes | nindent 8 }}
+        {{- end }}
+{{- end }}

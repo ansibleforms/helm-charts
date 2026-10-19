@@ -1,3 +1,5 @@
+{{- /* The app's, so nothing in runner mode (runner.enabled): the app runs elsewhere */}}
+{{- if ne (include "ansibleforms.runner.enabled" .) "true" }}
 {{- if dig "enabled" true (.Values.mysql | default dict) }}
 {{- /*
   Mounted at /etc/mysql/my.cnf with subPath, which replaces the file the image
@@ -24,4 +26,5 @@ metadata:
 data:
   my.cnf: |
 {{ dig "config" "[mysqld]\n" (.Values.mysql | default dict) | indent 4 }}
+{{- end }}
 {{- end }}

@@ -1,5 +1,33 @@
 {{- $np := (.Values.networkPolicy | default dict) }}
-{{- if $np.enabled }}
+{{- $runnerOn := eq (include "ansibleforms.runner.enabled" .) "true" }}
+{{- if and $np.enabled $runnerOn }}
+{{- /*
+  Runner mode: nothing may open a connection to the runner. It takes no call (it dials the
+  app), so the policy has no ingress rule at all, and only the kubelet's probes reach it,
+  which NetworkPolicy never blocks. Egress is left alone, as everywhere in this chart: the
+  runner dials the app at runner.appUrl (its address, its proxy, its DNS) and the playbooks
+  reach whatever they manage, so the socket to the app is allowed whatever it resolves to.
+  On the app's side, a networkPolicy.server of its release has to let this namespace in.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "ansibleforms.runner.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ansibleforms.runner.labels" . | nindent 4 }}
+  {{- with (include "ansibleforms.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "ansibleforms.runner.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress: []
+{{- else if $np.enabled }}
 {{- $npServer := ($np.server | default dict) }}
 {{- if and $npServer.enabled (not $npServer.from) }}
 {{- fail "\n\nnetworkPolicy.server.enabled is true but networkPolicy.server.from is empty.\n\nAn ingress rule with no peers allows nothing, so the policy would cut the server off from everything, including your ingress controller. Name who may connect, usually the namespace the controller runs in.\n" }}

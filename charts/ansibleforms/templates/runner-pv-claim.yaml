@@ -1,0 +1,50 @@
+{{- /*
+  The runner's volume, mounted at /app/dist/persistent: the spool of each job's output,
+  events and end until the app acks them (RTE_SPOOL_PATH), and the job files the app sent
+  (RTE_CACHE_PATH). On a volume, a runner that restarts sends what it had not delivered and
+  is not sent an unchanged folder again.
+
+  Sized and classed by storages.server, the same values as the volume the RTE shares with
+  the app in the server pod, so a cluster's storage settings carry over to a runner as they
+  are. Only in runner mode.
+*/}}
+{{- if eq (include "ansibleforms.runner.enabled" .) "true" }}
+{{- $server := .Values.storages.server | default dict -}}
+{{- $static := $server.static | default dict -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: {{ include "ansibleforms.runner.pvcName" . }}
+  labels:
+    {{- include "ansibleforms.runner.labels" . | nindent 4 }}
+  {{- with (include "ansibleforms.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - {{ $server.accessMode | default "ReadWriteMany" }}
+  resources:
+    requests:
+      storage: {{ $server.size | default "10Gi" }}
+
+  {{- if $static.enabled }}
+
+  {{- /* Static volume: a PersistentVolume with this name is expected to exist */}}
+  {{- if $static.storageClassName }}
+  storageClassName: {{ $static.storageClassName }}
+  {{- else }}
+  storageClassName: ""
+  {{- end }}
+  volumeName: {{ default (printf "%s-rte-pv" (include "ansibleforms.fullname" .)) $static.volumeName }}
+
+  {{- else }}
+
+  {{- /* Dynamic provisioning through a StorageClass (Longhorn, NFS CSI, ...) */}}
+  {{- if $server.className }}
+  storageClassName: {{ $server.className }}
+  {{- end }}
+
+  {{- end }}
+{{- end }}

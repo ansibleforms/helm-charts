@@ -6,6 +6,7 @@ This Helm chart deploys the AnsibleForms application and its MySQL database on K
 
 - Deploys AnsibleForms and MySQL with configurable images and resources
 - Runs the playbooks on an RTE next to the app, registered as the default runner
+- Installs a Runner on its own (`runner.enabled`) that dials an app elsewhere and joins it
 - Handles all sensitive data (DB credentials, admin credentials, encryption secret) via Kubernetes Secrets
 - All application environment variables are configurable via `values.yaml`
 - Storage class and size for both server and MySQL are configurable
@@ -648,6 +649,55 @@ runners:
 
 **Without the RTE.** `containers.rte.enabled: false` leaves it out, for an RTE you run
 elsewhere or for AWX, AAP or Ascender only. Add those runners under Connections > Runners.
+
+## Installing a Runner on its own
+
+With `runner.enabled` the chart installs only an RTE, a Runner that dials an AnsibleForms
+app installed elsewhere: another namespace, another cluster, a VM. It keeps one WebSocket
+open to the app (`RTE_MODE=outbound`), and the app sends it each job, with the job's files,
+over that socket. It needs no database, no encryption key and no inbound port, only its way
+out to the app's address, so it fits a network zone the app cannot reach into.
+
+```bash
+helm install runner1 ansibleforms/ansibleforms \
+  --namespace runners --create-namespace \
+  --set runner.enabled=true \
+  --set runner.appUrl=https://forms.example.com \
+  --set runner.name=zone-a \
+  --set runner.joinToken=afj_...
+```
+
+| Value | What it does |
+|-------|--------------|
+| `runner.enabled` | Installs only the Runner: no app, no MySQL, no Service, no Ingress |
+| `runner.appUrl` | The app's address as people open it, with its `BASE_URL` if any. Required |
+| `runner.name` | The runner name it joins as (`RTE_NAME`). Empty: the release name |
+| `runner.joinToken` | A join token made in the app, read on the first start to be approved at once |
+| `runner.appTlsVerify` | `false` accepts the app's self-signed certificate (`APP_TLS_VERIFY=0`) |
+
+It renders one Deployment, `<release>-rte` (one replica, Recreate), a PVC for its spool and
+job files, `<release>-rte-pvc`, sized and classed by `storages.server`, and the
+`<release>-keys` Secret with its `RTE_TOKEN` and the join token. The token is generated once
+and kept across upgrades as for the RTE in the server pod, or read from
+`containers.rte.existingTokenSecret`. Under `helm template`, Argo CD or Flux set
+`applications.rte.token` or that Secret, as the chart asks. The container takes its image,
+resources, probes and extras from `containers.rte`, its environment from
+`applications.rte.env` (`HTTPS_PROXY`, `NO_PROXY`, `NODE_EXTRA_CA_CERTS`, `RTE_MAX_JOBS`),
+and the pod its scheduling and security context from `containers.server`.
+
+**Approval.** Without a join token the runner asks to join and waits: approve it under
+Connections > Runners, where the bell in the header counts the runners waiting. Its log
+shows the token's fingerprint to compare before approving. For an unattended install make a
+join token there first, single-use, and pass it as `runner.joinToken`. Once approved the
+runner signs in with its own `RTE_TOKEN`, which the app keeps: keep the `<release>-keys`
+Secret with it, since a new token is refused until an admin approves the runner again.
+
+**Checking it.** `kubectl logs deploy/<release>-rte` says `dialing the app at ...` and then
+`connected to the app`, and the pod turns Ready once the app has welcomed it. Connections >
+Runners lists it as type RTE, mode outbound, connected while its socket is open; forms run
+on it with `runner: <name>`. `helm test` checks the app at `runner.appUrl` answers from the
+runner's namespace. With `networkPolicy.enabled` nothing may connect to the runner, and its
+way out is left open. On the app's side, a `networkPolicy.server` has to let it in.
 
 ## Tuning the bundled MySQL
 

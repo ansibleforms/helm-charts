@@ -1,3 +1,5 @@
+{{- /* The app's, so nothing in runner mode (runner.enabled): the app runs elsewhere */}}
+{{- if ne (include "ansibleforms.runner.enabled" .) "true" }}
 {{- if eq (include "ansibleforms.rte.seedEnabled" .) "true" }}
 apiVersion: v1
 kind: ConfigMap
@@ -13,4 +15,5 @@ metadata:
 data:
   seed.yaml: |
     {{- include "ansibleforms.rte.seed" . | nindent 4 }}
+{{- end }}
 {{- end }}

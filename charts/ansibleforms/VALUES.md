@@ -117,6 +117,11 @@ values.yaml itself and in the [README](README.md).
 | networkPolicy.server.from | list | `[]` | NetworkPolicyPeer entries allowed to reach the server; required when the server policy is on. |
 | rollOnChange.enabled | bool | `true` | Roll the pods when the generated Secret or my.cnf changes. |
 | rollOnChange.external | bool | `false` | Also roll on changes to secrets.existingSecret and the forms ConfigMaps. Not under helm template, Argo CD or Flux. |
+| runner.appTlsVerify | bool | `true` | false accepts the app's self-signed certificate (APP_TLS_VERIFY=0), inside one trusted network only. |
+| runner.appUrl | string | `""` | The app's address as people open it (https://forms.example.com). Required with runner.enabled. |
+| runner.enabled | bool | `false` | true installs only an RTE (a Runner) that dials an AnsibleForms app elsewhere: no app, no database, no ingress. |
+| runner.joinToken | string | `""` | A join token made in the app (Connections > Runners), used on the first start to be approved at once. Empty: it waits for an admin's approval. |
+| runner.name | string | `""` | The runner name it joins as (RTE_NAME). Empty: the release name. |
 | secrets.existingSecret | string | `""` | Use this existing Secret instead of creating one. Needs DB_USER, DB_PASSWORD, ENCRYPTION_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD. |
 | secrets.generate | bool | `false` | Generate missing credentials on install and keep them on upgrades. Refuses to run under helm template. |
 | services.mysql.annotations | object | `{}` | Annotations on the MySQL Service. |

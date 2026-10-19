@@ -1,0 +1,24 @@
+---
+# Runner mode: only an RTE that dials an app installed elsewhere. The join token and the
+# NetworkPolicy are on so the render covers every branch of the runner's templates; the
+# app's placeholder credentials stay in place, since runner mode renders nothing that
+# reads them.
+runner:
+  enabled: true
+  appUrl: https://forms.ci.example.com/
+  name: ci-runner
+  joinToken: afj_ci-not-a-real-join-token
+  appTlsVerify: false
+
+applications:
+  rte:
+    # lint and template have no cluster to read a generated token back from
+    token: ci-not-a-real-rte-token
+    env:
+      RTE_MAX_JOBS: 2
+
+networkPolicy:
+  enabled: true
+
+storages:
+  server: {size: 1Gi, accessMode: ReadWriteOnce}

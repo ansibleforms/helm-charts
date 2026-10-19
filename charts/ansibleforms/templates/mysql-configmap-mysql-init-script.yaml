@@ -1,3 +1,5 @@
+{{- /* The app's, so nothing in runner mode (runner.enabled): the app runs elsewhere */}}
+{{- if ne (include "ansibleforms.runner.enabled" .) "true" }}
 {{- if dig "enabled" true (.Values.mysql | default dict) }}
 {{- /*
   Only the grant. AnsibleForms 7 creates its own schema when it finds an empty
@@ -31,4 +33,5 @@ data:
     -- MYSQL_USER with rights on the AnsibleForms schema only : nothing to grant.
     SELECT 1;
     {{- end }}
+{{- end }}
 {{- end }}
