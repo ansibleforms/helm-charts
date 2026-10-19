@@ -98,9 +98,10 @@ jobs:
           latest=false
           [ "$highest" = "$VERSION" ] && latest=true
           echo "Releasing $VERSION (highest released: $highest, latest: $latest)"
+          # The title is the tag, as in every AnsibleForms repository
           gh release create "v${VERSION}" \
             --target "$SHA" \
-            --title "ansibleforms ${VERSION}" \
+            --title "v${VERSION}" \
             --generate-notes \
             --latest="$latest" \
             "dist/ansibleforms-${VERSION}.tgz"
