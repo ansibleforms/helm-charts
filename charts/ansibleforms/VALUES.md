@@ -54,7 +54,7 @@ values.yaml itself and in the [README](README.md).
 | containers.rte.extraEnv | list | `[]` | Extra env entries for the RTE, written after the generated ones so they win. |
 | containers.rte.extraEnvFrom | list | `[]` | ConfigMaps or Secrets injected as environment into the RTE. |
 | containers.rte.extraVolumeMounts | list | `[]` | Extra volume mounts for the RTE. |
-| containers.rte.image | string | `"ghcr.io/ansibleforms/ansibleforms-rte-full:7.3.0"` | AnsibleForms RTE image. Keep it on the app's release, or one with the same RTE contract. |
+| containers.rte.image | string | `"ghcr.io/ansibleforms/ansibleforms-rte-full:7.4.0"` | AnsibleForms RTE image. Keep it on the app's release, or one with the same RTE contract. |
 | containers.rte.imagePullPolicy | string | `"IfNotPresent"` | RTE image pull policy. |
 | containers.rte.liveness | object | `{"failureThreshold":3,"periodSeconds":30,"timeoutSeconds":5}` | RTE liveness probe (HTTP /live). |
 | containers.rte.port | int | `8000` | Port the RTE listens on inside the pod. Any free port above 1024. |
@@ -66,7 +66,7 @@ values.yaml itself and in the [README](README.md).
 | containers.server.bindPrivilegedPorts | bool | `true` | Let the non-root server bind ports 80 and 443 (sets net.ipv4.ip_unprivileged_port_start). |
 | containers.server.extraEnv | list | `[]` | Extra env entries for the server, written after the generated ones so they win. |
 | containers.server.extraEnvFrom | list | `[]` | ConfigMaps or Secrets injected as environment into the server. |
-| containers.server.image | string | `"ghcr.io/ansibleforms/ansibleforms:7.3.0"` | AnsibleForms image. |
+| containers.server.image | string | `"ghcr.io/ansibleforms/ansibleforms:7.4.0"` | AnsibleForms image. |
 | containers.server.imagePullSecrets | list | `[]` | Pull secrets for the AnsibleForms image only; overrides imagePullSecrets. |
 | containers.server.initContainers | list | `[]` | Init containers for the server pod. |
 | containers.server.liveness | object | `{"failureThreshold":3,"initialDelaySeconds":15,"path":"/api/v2/live","periodSeconds":15,"timeoutSeconds":15}` | Server liveness probe (HTTP). The path is relative to BASE_URL. |
