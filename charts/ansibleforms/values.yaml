@@ -390,7 +390,7 @@ containers:
 
   server:
     # -- AnsibleForms image.
-    image: ghcr.io/ansibleforms/ansibleforms:7.4.1
+    image: ghcr.io/ansibleforms/ansibleforms:7.4.2
     # One pod or none. Each server pod runs the whole of AnsibleForms (the app, the
     # worker and the scheduler, AF_ROLE all) and its own RTE on the one shared volume,
     # and the chart does not split those roles over Deployments of their own, so a
@@ -616,7 +616,7 @@ containers:
     # -- Run the RTE next to the app. Without it, playbook forms need a runner added by hand.
     enabled: true
     # -- AnsibleForms RTE image. Keep it on the app's release, or one with the same RTE contract.
-    image: ghcr.io/ansibleforms/ansibleforms-rte-full:7.4.1
+    image: ghcr.io/ansibleforms/ansibleforms-rte-full:7.4.2
     # -- RTE image pull policy.
     imagePullPolicy: IfNotPresent
     # -- Port the RTE listens on inside the pod. Any free port above 1024.

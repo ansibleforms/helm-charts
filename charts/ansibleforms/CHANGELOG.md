@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.4.2
+
+AnsibleForms 7.4.2.
+
+### Changed
+
+- **The default image is AnsibleForms 7.4.2**,
+  `ghcr.io/ansibleforms/ansibleforms:7.4.2` (the RTE alike), and `appVersion` follows. See the
+  [7.4.2 release notes](https://github.com/ansibleforms/ansibleforms/releases/tag/7.4.2).
+
 ## 7.4.1
 
 AnsibleForms 7.4.1.
