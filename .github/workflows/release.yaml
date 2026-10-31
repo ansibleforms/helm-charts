@@ -83,10 +83,21 @@ jobs:
         if: steps.check.outputs.released == 'true'
         run: helm package charts/ansibleforms --destination dist
 
+      # The release is created with a token of the ansibleforms-release GitHub App, so it is
+      # ansibleforms[bot]'s, as the app's and the installer's releases are (GITHUB_TOKEN made it
+      # github-actions[bot]'s). RELEASE_APP_CLIENT_ID and RELEASE_APP_PRIVATE_KEY, as the Follow
+      # app release workflow uses them.
+      - uses: actions/create-github-app-token@v3
+        id: release_app
+        if: steps.check.outputs.released == 'true'
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
       - name: Create GitHub release
         if: steps.check.outputs.released == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.release_app.outputs.token }}
           VERSION: ${{ steps.chart.outputs.version }}
           # The commit CI tested and this job packaged. Without --target the tag went on
           # the tip of the default branch, so a 6.x release tagged a commit on main.
