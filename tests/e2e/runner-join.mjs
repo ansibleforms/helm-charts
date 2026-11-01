@@ -3,7 +3,7 @@
 // runner waiting for an admin, or waits for the runner to show connected under
 // Connections > Runners.
 //
-//   kubectl cp test/e2e/runner-join.mjs <pod>:/tmp/runner-join.mjs -c server
+//   kubectl cp tests/e2e/runner-join.mjs <pod>:/tmp/runner-join.mjs -c server
 //   kubectl exec <pod> -c server -- node /tmp/runner-join.mjs jointoken <name>
 //   kubectl exec <pod> -c server -- node /tmp/runner-join.mjs approve <runner name>
 //   kubectl exec <pod> -c server -- node /tmp/runner-join.mjs connected <runner name>

@@ -19,9 +19,9 @@ updates:
 
 
   # The Kubernetes (kind node image), kubeconform and Calico versions CI tests against,
-  # pinned as FROM lines in test/versions/Dockerfile.
+  # pinned as FROM lines in tests/versions/Dockerfile.
   - package-ecosystem: docker
-    directory: /test/versions
+    directory: /tests/versions
     schedule:
       interval: weekly
     commit-message:

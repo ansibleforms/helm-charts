@@ -10,14 +10,14 @@ yamllint --strict .
 
 cd charts/ansibleforms
 helm lint . --strict
-for f in ci/*-values.yaml ../../test/values/*-values.yaml; do
+for f in ci/*-values.yaml ../../tests/values/*-values.yaml; do
   helm lint . --strict --values "$f"
   helm template ansibleforms . --values "$f" | kubeconform -strict -summary
 done
 ```
 
 The chart is in `charts/ansibleforms`. Its `ci/*-values.yaml` are the scenarios `ct` installs on a kind cluster.
-`test/values/*-values.yaml` are mostly render-only, for combinations that cannot
+`tests/values/*-values.yaml` are mostly render-only, for combinations that cannot
 be installed unattended or that only exist to prove a manifest is shaped right.
 Some of them are driven by hand from the workflow: the two `ingress-*` files are
 installed behind a real controller, and `minimal-mysql` exists to prove the
@@ -133,8 +133,8 @@ under `## Unreleased` at the top of `charts/ansibleforms/CHANGELOG.md`; CI refus
 chart change without that entry, so nothing waits unnoticed. Anything that renames a
 resource, removes a value or forces an existing Deployment to be recreated belongs
 there with the steps an operator has to take. Changes that do not reach the packaged
-chart, to CI, to `test/` or to the documentation, need no entry; the chart's `ci/` is
-in its `.helmignore`, and `test/` sits outside the chart altogether.
+chart, to CI, to `tests/` or to the documentation, need no entry; the chart's `ci/` is
+in its `.helmignore`, and `tests/` sits outside the chart altogether.
 
 ## Following app releases
 
