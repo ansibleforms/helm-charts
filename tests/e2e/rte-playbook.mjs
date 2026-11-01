@@ -3,7 +3,7 @@
 // in as the admin, checks the runner the chart's seed registered, launches the form and
 // waits for the job. The output must come back from the RTE.
 //
-//   kubectl cp test/e2e/rte-playbook.mjs <pod>:/tmp/rte-playbook.mjs -c server
+//   kubectl cp tests/e2e/rte-playbook.mjs <pod>:/tmp/rte-playbook.mjs -c server
 //   kubectl exec <pod> -c server -- node /tmp/rte-playbook.mjs
 import fs from "fs";
 
