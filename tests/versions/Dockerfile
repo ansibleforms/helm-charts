@@ -14,4 +14,4 @@
 FROM kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5 AS kind-node
 FROM ghcr.io/yannh/kubeconform:v0.8.0 AS kubeconform
 FROM calico/node:v3.33.0 AS calico
-FROM quay.io/helmpack/chart-testing:v3.14.0 AS chart-testing
+FROM quay.io/helmpack/chart-testing:v3.15.0 AS chart-testing
