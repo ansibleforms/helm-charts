@@ -30,7 +30,7 @@ values.yaml itself and in the [README](README.md).
 | containers.mysql.extraEnvFrom | list | `[]` | ConfigMaps or Secrets injected as environment into the MySQL container. |
 | containers.mysql.extraVolumeMounts | list | `[]` | Extra volume mounts in the MySQL container. |
 | containers.mysql.extraVolumes | list | `[]` | Extra volumes on the MySQL pod. |
-| containers.mysql.image | string | `"mysql:8.4"` | MySQL image. |
+| containers.mysql.image | string | `"mysql:9.7"` | MySQL image. |
 | containers.mysql.imagePullPolicy | string | `"IfNotPresent"` | MySQL image pull policy. |
 | containers.mysql.imagePullSecrets | list | `[]` | Pull secrets for the MySQL image only; overrides imagePullSecrets. |
 | containers.mysql.initContainers | list | `[]` | Init containers for the MySQL pod. |

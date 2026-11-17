@@ -1232,6 +1232,15 @@ jobs:
             echo "schema the older app cannot read. Restore the backup made before the upgrade instead."
             exit 0
           fi
+          # Nor across a MySQL line (8.4 to 9.7 LTS): the new server upgrades the data directory
+          # on its first start, and MySQL never downgrades one - the older server cannot open it.
+          mysql_prev="$(helm show values ansibleforms/ansibleforms --version "$PREV" | awk '$1 == "image:" && $2 ~ /^mysql:/ {print $2; exit}')"
+          mysql_here="$(awk '$1 == "image:" && $2 ~ /^mysql:/ {print $2; exit}' values.yaml)"
+          if [ "$mysql_prev" != "$mysql_here" ]; then
+            echo "No rollback: MySQL goes from $mysql_prev to $mysql_here, which upgraded the data"
+            echo "directory in place; MySQL cannot downgrade it. Restore the backup made before instead."
+            exit 0
+          fi
           echo "Rolling back to revision 1, which is $PREV"
           helm rollback upg 1 --namespace "$NS" --wait --timeout 12m
 
