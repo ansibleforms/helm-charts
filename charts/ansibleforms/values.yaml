@@ -259,12 +259,13 @@ containers:
     # -- Existing ServiceAccount for the MySQL pod. Empty uses the namespace default.
     serviceAccountName: ''
 
-    # Pinned on purpose. A floating tag means an unattended major upgrade the
-    # next time the pod is rescheduled, and MySQL does not support downgrades,
-    # so a rollback would leave the data directory unreadable.
-    # Already running a 9.x image? Set this to your current tag before upgrading.
+    # Pinned on purpose, to an LTS line : a floating tag means an unattended major
+    # upgrade the next time the pod is rescheduled, and MySQL does not support
+    # downgrades, so a rollback would leave the data directory unreadable. 9.7 is
+    # the LTS after 8.4, the one upgrade MySQL makes in place (see the README's
+    # Upgrading the bundled MySQL). Running another image? Set it here before upgrading.
     # -- MySQL image.
-    image: mysql:8.4
+    image: mysql:9.7
     # -- MySQL image pull policy.
     imagePullPolicy: IfNotPresent
     # -- MySQL container resources.

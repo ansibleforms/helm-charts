@@ -47,6 +47,6 @@ annotations:
     - name: ansibleforms-rte-full
       image: ghcr.io/ansibleforms/ansibleforms-rte-full:7.6.0
     - name: mysql
-      image: mysql:8.4
+      image: mysql:9.7
     - name: helm-test
       image: curlimages/curl:8.10.1
