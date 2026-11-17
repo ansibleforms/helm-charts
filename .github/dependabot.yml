@@ -1,5 +1,8 @@
 version: 2
 
+# Every pending update gets its pull request at once (open-pull-requests-limit: 100 on each
+# entry, as Dependabot has no unlimited value), instead of five at a time per entry.
+
 # Keeps the workflow actions on their latest version, majors included : CI lints the chart,
 # installs it on a kind cluster and upgrades a live release on every pull request,
 # so a breaking action fails there before it merges. Updates are never grouped : every
@@ -11,6 +14,7 @@ version: 2
 
 updates:
   - package-ecosystem: github-actions
+    open-pull-requests-limit: 100
     directory: /
     schedule:
       interval: weekly
@@ -21,6 +25,7 @@ updates:
   # The Kubernetes (kind node image), kubeconform and Calico versions CI tests against,
   # pinned as FROM lines in tests/versions/Dockerfile.
   - package-ecosystem: docker
+    open-pull-requests-limit: 100
     directory: /tests/versions
     schedule:
       interval: weekly
