@@ -127,7 +127,7 @@ containers:
         cpu: "0.25"
         memory: 256Mi
   mysql:
-    image: mysql:8.4
+    image: mysql:9.7
     resources:
       limits:
         cpu: "0.5"
@@ -699,6 +699,23 @@ on it with `runner: <name>`. `helm test` checks the app at `runner.appUrl` answe
 runner's namespace. With `networkPolicy.enabled` nothing may connect to the runner, and its
 way out is left open. On the app's side, a `networkPolicy.server` has to let it in.
 
+## Upgrading the bundled MySQL
+
+The chart runs MySQL 9.7, the LTS that follows 8.4. A release on 8.4 upgrades in place when the new chart restarts its
+MySQL pod, as MySQL supports moving to the next LTS; do these steps first, while it still runs 8.4.
+
+1. Back up the database, as before any upgrade.
+2. List the users still signing in with `mysql_native_password`, which MySQL 9 no longer has, and move each of them to
+   `caching_sha2_password` with its own password (`kubectl get deploy` names the MySQL one):
+
+   ```bash
+   kubectl exec deploy/<mysql deployment> -- mysql -uroot -p -e "SELECT user, host FROM mysql.user WHERE plugin='mysql_native_password';"
+   kubectl exec deploy/<mysql deployment> -- mysql -uroot -p -e "ALTER USER '<user>'@'<host>' IDENTIFIED WITH caching_sha2_password BY '<its password>';"
+   ```
+
+3. Take `mysql_native_password=ON` out of `mysql.config` if you added it: MySQL 9 refuses to start with it.
+4. Upgrade the release. To stay on 8.4 for now, set `containers.mysql.image: mysql:8.4` in your values.
+
 ## Tuning the bundled MySQL
 
 `mysql.config` is the `my.cnf` the chart mounts. It defaults to a bare
@@ -731,7 +748,7 @@ it falls depends on the image underneath. Connect over TCP and it is the same
 every time, which is how AnsibleForms connects and how the probes check:
 
 ```bash
-kubectl exec deploy/<release>-mysql -- \
+kubectl exec deploy/<mysql deployment> -- \
   mysql -h 127.0.0.1 --protocol=TCP -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SHOW DATABASES;"
 ```
 
