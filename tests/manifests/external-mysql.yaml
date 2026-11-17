@@ -21,9 +21,7 @@ spec:
     spec:
       containers:
         - name: mysql
-          image: mysql:8.4
-          args:
-            - --mysql-native-password=ON
+          image: mysql:9.7
           env:
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
