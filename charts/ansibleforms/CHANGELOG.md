@@ -1,9 +1,14 @@
 # Changelog
 
-## Unreleased
+## 7.7.0
+
+AnsibleForms 7.7.0.
 
 ### Changed
 
+- **The default image is AnsibleForms 7.7.0**,
+  `ghcr.io/ansibleforms/ansibleforms:7.7.0` (the RTE alike), and `appVersion` follows. See the
+  [7.7.0 release notes](https://github.com/ansibleforms/ansibleforms/releases/tag/7.7.0).
 - **The bundled MySQL is 9.7 LTS**, the LTS after 8.4: `containers.mysql.image` is `mysql:9.7`. A
   release on 8.4 upgrades in place; see [Upgrading the bundled MySQL](README.md#upgrading-the-bundled-mysql)
   first, or keep 8.4 by setting the image.
