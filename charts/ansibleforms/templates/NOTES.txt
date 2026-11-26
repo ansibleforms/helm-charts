@@ -19,7 +19,7 @@ Where it dials
 
     kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "ansibleforms.runner.fullname" . }} -f
 
-  "dialing the app at ..." then "connected to the app" say it got there. The pod is Ready once
+  "dialing the controller at ..." then "connected to the controller" say it got there. The pod is Ready once
   the app has welcomed it on the socket.
 
 How it gets approved

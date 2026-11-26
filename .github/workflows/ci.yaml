@@ -879,8 +879,8 @@ jobs:
             fi
           done
           kubectl -n runners get all,pvc,secret
-          kubectl -n runners logs deploy/joined-rte | grep -q "dialing the app at" || {
-            echo "::error::The runner never dialed the app."
+          kubectl -n runners logs deploy/joined-rte | grep -q "dialing the controller at" || {
+            echo "::error::The runner never dialed the controller."
             kubectl -n runners logs deploy/joined-rte --tail=40
             exit 1; }
           api connected ci-joined
