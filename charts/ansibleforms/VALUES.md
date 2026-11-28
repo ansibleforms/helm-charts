@@ -120,7 +120,7 @@ values.yaml itself and in the [README](README.md).
 | runner.appTlsVerify | bool | `true` | false accepts the app's self-signed certificate (APP_TLS_VERIFY=0), inside one trusted network only. |
 | runner.appUrl | string | `""` | The app's address as people open it (https://forms.example.com). Required with runner.enabled. |
 | runner.enabled | bool | `false` | true installs only an RTE (a Runner) that dials an AnsibleForms app elsewhere: no app, no database, no ingress. |
-| runner.joinToken | string | `""` | A join token made in the app (Connections > Runners), used on the first start to be approved at once. Empty: it waits for an admin's approval. |
+| runner.joinToken | string | `""` | A join token made with the app's API (POST /api/v2/runner/jointoken), used on the first start to be approved at once. Empty: it waits for an admin's approval. |
 | runner.name | string | `""` | The runner name it joins as (RTE_NAME). Empty: the release name. |
 | runner.podPerJob.enabled | bool | `false` | true runs the Go Runner, a pod per job. Runner mode only. |
 | runner.podPerJob.image | string | `"ghcr.io/ansibleforms/ansibleforms-rte-runner:7.8.0"` | The Go Runner's image, copied into each job's pod too. Keep it on the app's release. |

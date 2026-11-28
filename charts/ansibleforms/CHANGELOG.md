@@ -8,6 +8,11 @@
   in runner mode, which runs each job in a pod of its own, with the ServiceAccount, Role and
   RoleBinding it needs.
 
+### Fixed
+
+- **Join tokens:** the values, the install notes and the README say a join token is made with the
+  app's API (`POST /api/v2/runner/jointoken`), not under Connections > Runners.
+
 ## 7.8.0
 
 AnsibleForms 7.8.0.

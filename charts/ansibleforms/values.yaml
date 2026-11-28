@@ -73,8 +73,8 @@ imagePullSecrets: []
 # scheduling, pull secrets, service account and security context from containers.server.
 #
 # Approval: the first time it joins, an app that does not know it holds it as waiting
-# until an admin approves it under Connections > Runners. A join token made there
-# (runner.joinToken) approves it at once, for an unattended install. From then on it signs
+# until an admin approves it under Connections > Runners. A join token made with the app's
+# API, POST /api/v2/runner/jointoken (runner.joinToken), approves it at once, for an unattended install. From then on it signs
 # in with its own RTE_TOKEN, which the app keeps: keep the <release>-keys Secret with it.
 #
 #   helm install runner1 ansibleforms/ansibleforms --namespace runners --create-namespace \
@@ -95,7 +95,7 @@ runner:
   # Read on the first start only: once approved, the runner signs in with its own token and
   # the join token may expire or be revoked. It goes into the <release>-keys Secret, so it
   # passes through the release history Helm keeps; make it single-use (maxUses 1).
-  # -- A join token made in the app (Connections > Runners), used on the first start to be approved at once. Empty: it waits for an admin's approval.
+  # -- A join token made with the app's API (POST /api/v2/runner/jointoken), used on the first start to be approved at once. Empty: it waits for an admin's approval.
   joinToken: ""
   # With true, a private CA is named through NODE_EXTRA_CA_CERTS in applications.rte.env.
   # -- false accepts the app's self-signed certificate (APP_TLS_VERIFY=0), inside one trusted network only.
