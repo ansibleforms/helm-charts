@@ -122,6 +122,8 @@ values.yaml itself and in the [README](README.md).
 | runner.enabled | bool | `false` | true installs only an RTE (a Runner) that dials an AnsibleForms app elsewhere: no app, no database, no ingress. |
 | runner.joinToken | string | `""` | A join token made in the app (Connections > Runners), used on the first start to be approved at once. Empty: it waits for an admin's approval. |
 | runner.name | string | `""` | The runner name it joins as (RTE_NAME). Empty: the release name. |
+| runner.podPerJob.enabled | bool | `false` | true runs the Go Runner, a pod per job. Runner mode only. |
+| runner.podPerJob.image | string | `"ghcr.io/ansibleforms/ansibleforms-rte-runner:7.8.0"` | The Go Runner's image, copied into each job's pod too. Keep it on the app's release. |
 | secrets.existingSecret | string | `""` | Use this existing Secret instead of creating one. Needs DB_USER, DB_PASSWORD, ENCRYPTION_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD. |
 | secrets.generate | bool | `false` | Generate missing credentials on install and keep them on upgrades. Refuses to run under helm template. |
 | services.mysql.annotations | object | `{}` | Annotations on the MySQL Service. |

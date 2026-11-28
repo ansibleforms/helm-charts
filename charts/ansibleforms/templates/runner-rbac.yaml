@@ -1,0 +1,69 @@
+{{- /*
+  The Go Runner (runner.podPerJob.enabled) runs each job in a pod of its own, in the release's
+  namespace, through the Kubernetes API with its service account's token. What it needs, and
+  nothing more (the same as deploy/kubernetes-rbac.yaml in ansibleforms/runner):
+    pods          create, get, list, patch, delete   make a job's pod, follow it, stop it
+                                                     (its deadline lowered), remove it
+    pods/log      get                                read the job's lines
+    pods/attach   create, get                        write the job on the pod's stdin (a
+                                                     websocket attach takes both)
+  The ServiceAccount is the chart's only when containers.server.serviceAccountName names none.
+*/}}
+{{- if eq (include "ansibleforms.runner.podPerJob" .) "true" }}
+{{- $sa := include "ansibleforms.runner.serviceAccountName" . }}
+{{- if not (dig "server" "serviceAccountName" "" (.Values.containers | default dict)) }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $sa }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ansibleforms.runner.labels" . | nindent 4 }}
+  {{- with (include "ansibleforms.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+---
+{{- end }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "ansibleforms.runner.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ansibleforms.runner.labels" . | nindent 4 }}
+  {{- with (include "ansibleforms.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "get", "list", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods/attach"]
+    verbs: ["create", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "ansibleforms.runner.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ansibleforms.runner.labels" . | nindent 4 }}
+  {{- with (include "ansibleforms.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "ansibleforms.runner.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $sa }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

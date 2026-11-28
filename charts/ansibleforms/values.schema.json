@@ -94,6 +94,24 @@
             "integer",
             "string"
           ]
+        },
+        "podPerJob": {
+          "description": "The Go Runner, running each job in a pod of its own (runner mode only).",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "image": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
         }
       }
     },

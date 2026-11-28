@@ -3,7 +3,7 @@ name: Follow app release
 # Keeps the chart's default image on par with AnsibleForms. When the app releases, its
 # release workflow sends an app-release repository_dispatch here with the tag. This
 # workflow finds the chart line of that major version (main for the current major,
-# release/<major>.x for a maintenance line), moves the default app and RTE images, the
+# release/<major>.x for a maintenance line), moves the default app, RTE and Go Runner images, the
 # chart version, appVersion and the Artifact Hub images annotation to the release (the
 # chart is versioned with AnsibleForms), turns the changelog's Unreleased section into
 # the release's entry, regenerates VALUES.md and opens a pull request with auto-merge on.
@@ -109,6 +109,24 @@ jobs:
           ref: ${{ steps.target.outputs.base }}
           token: ${{ steps.app.outputs.token }}
 
+      # The Go Runner (runner.podPerJob.image) is released with the app as well, by
+      # ansibleforms/runner, a few minutes after it : the chart's CI installs it, so the bump
+      # waits until that version is published
+      - name: Wait for the Go Runner of the version
+        if: steps.target.outputs.base != ''
+        env:
+          VERSION: ${{ steps.target.outputs.version }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            if docker manifest inspect "ghcr.io/ansibleforms/ansibleforms-rte-runner:${VERSION}" >/dev/null 2>&1; then
+              echo "The Go Runner ${VERSION} is published."; exit 0
+            fi
+            sleep 30
+          done
+          echo "::error::ghcr.io/ansibleforms/ansibleforms-rte-runner:${VERSION} was not published within 30 minutes. Once ansibleforms/runner released it, run this workflow again by hand with ${VERSION}."
+          exit 1
+
       - name: Move the default image
         id: bump
         if: steps.target.outputs.base != ''
@@ -136,6 +154,9 @@ jobs:
           # The RTE is released with the app under the same tag
           values = re.sub(r"(image: ghcr\.io/ansibleforms/ansibleforms-rte-full:)\d+\.\d+\.\d+",
                           lambda m: m.group(1) + version, values, count=1)
+          # and the Go Runner, by ansibleforms/runner
+          values = re.sub(r"(image: ghcr\.io/ansibleforms/ansibleforms-rte-runner:)\d+\.\d+\.\d+",
+                          lambda m: m.group(1) + version, values, count=1)
           open(values_path, "w").write(values)
 
           chart_path = "charts/ansibleforms/Chart.yaml"
@@ -148,6 +169,8 @@ jobs:
                                 f"image: ghcr.io/ansibleforms/ansibleforms:{version}")
           chart = chart.replace(f"image: ghcr.io/ansibleforms/ansibleforms-rte-full:{now}",
                                 f"image: ghcr.io/ansibleforms/ansibleforms-rte-full:{version}")
+          chart = chart.replace(f"image: ghcr.io/ansibleforms/ansibleforms-rte-runner:{now}",
+                                f"image: ghcr.io/ansibleforms/ansibleforms-rte-runner:{version}")
           open(chart_path, "w").write(chart)
 
           log_path = "charts/ansibleforms/CHANGELOG.md"

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **A pod per job:** `runner.podPerJob.enabled` runs the [RTE Runner written in Go](https://github.com/ansibleforms/runner)
+  in runner mode, which runs each job in a pod of its own, with the ServiceAccount, Role and
+  RoleBinding it needs.
+
 ## 7.8.0
 
 AnsibleForms 7.8.0.
