@@ -31,8 +31,8 @@ How it gets approved
   No runner.joinToken, so it asks to join and waits for an admin: in the app, under
   Connections > Runners, approve "{{ $runnerName }}" (the bell in the header counts the runners waiting).
   Its log shows the token's fingerprint, to compare with the one the app shows before approving.
-  For an unattended install, make a join token under Connections > Runners and pass it as
-  runner.joinToken.
+  For an unattended install, make a join token with the app's API (POST /api/v2/runner/jointoken)
+  and pass it as runner.joinToken.
 {{- end }}
 
 Seeing it in the app

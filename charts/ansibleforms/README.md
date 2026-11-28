@@ -672,7 +672,7 @@ helm install runner1 ansibleforms/ansibleforms \
 | `runner.enabled` | Installs only the Runner: no app, no MySQL, no Service, no Ingress |
 | `runner.appUrl` | The app's address as people open it, with its `BASE_URL` if any. Required |
 | `runner.name` | The runner name it joins as (`RTE_NAME`). Empty: the release name |
-| `runner.joinToken` | A join token made in the app, read on the first start to be approved at once |
+| `runner.joinToken` | A join token made with the app's API, read on the first start to be approved at once |
 | `runner.appTlsVerify` | `false` accepts the app's self-signed certificate (`APP_TLS_VERIFY=0`) |
 | `runner.podPerJob.enabled` | Runs the Runner written in Go, which runs each job in a pod of its own |
 
@@ -699,7 +699,8 @@ them from Runner 7.9.0 on.
 **Approval.** Without a join token the runner asks to join and waits: approve it under
 Connections > Runners, where the bell in the header counts the runners waiting. Its log
 shows the token's fingerprint to compare before approving. For an unattended install make a
-join token there first, single-use, and pass it as `runner.joinToken`. Once approved the
+single-use join token first with the app's API, `POST /api/v2/runner/jointoken` with
+`maxUses: 1`, and pass it as `runner.joinToken`. Once approved the
 runner signs in with its own `RTE_TOKEN`, which the app keeps: keep the `<release>-keys`
 Secret with it, since a new token is refused until an admin approves the runner again.
 
