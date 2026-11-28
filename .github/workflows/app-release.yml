@@ -109,23 +109,26 @@ jobs:
           ref: ${{ steps.target.outputs.base }}
           token: ${{ steps.app.outputs.token }}
 
-      # The Go Runner (runner.podPerJob.image) is released with the app as well, by
-      # ansibleforms/runner, a few minutes after it : the chart's CI installs it, so the bump
-      # waits until that version is published
-      - name: Wait for the Go Runner of the version
+      # The RTE (containers.rte.image, ansibleforms-rte-full) and the Go Runner
+      # (runner.podPerJob.image) are published with the app as well, by ansibleforms/rte and
+      # ansibleforms/runner, a few minutes after it : the chart's CI installs both, so the bump
+      # waits until that version of each is published
+      - name: Wait for the RTE and the Go Runner of the version
         if: steps.target.outputs.base != ''
         env:
           VERSION: ${{ steps.target.outputs.version }}
         run: |
           set -euo pipefail
-          for i in $(seq 1 60); do
-            if docker manifest inspect "ghcr.io/ansibleforms/ansibleforms-rte-runner:${VERSION}" >/dev/null 2>&1; then
-              echo "The Go Runner ${VERSION} is published."; exit 0
-            fi
-            sleep 30
+          for image in ansibleforms-rte-full ansibleforms-rte-runner; do
+            for i in $(seq 1 60); do
+              if docker manifest inspect "ghcr.io/ansibleforms/${image}:${VERSION}" >/dev/null 2>&1; then
+                echo "ghcr.io/ansibleforms/${image}:${VERSION} is published."; continue 2
+              fi
+              sleep 30
+            done
+            echo "::error::ghcr.io/ansibleforms/${image}:${VERSION} was not published within 30 minutes. Once it is, run this workflow again by hand with ${VERSION}."
+            exit 1
           done
-          echo "::error::ghcr.io/ansibleforms/ansibleforms-rte-runner:${VERSION} was not published within 30 minutes. Once ansibleforms/runner released it, run this workflow again by hand with ${VERSION}."
-          exit 1
 
       - name: Move the default image
         id: bump
