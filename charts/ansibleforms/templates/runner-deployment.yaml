@@ -26,6 +26,8 @@
 {{- /* hasKey, not default: false is the value that matters here, and default drops it */}}
 {{- $tlsVerify := ternary (toString $runner.appTlsVerify) "true" (hasKey $runner "appTlsVerify") }}
 {{- $joinToken := toString ($runner.joinToken | default "") }}
+{{- $podPerJob := eq (include "ansibleforms.runner.podPerJob" .) "true" }}
+{{- $goImage := dig "podPerJob" "image" "" $runner }}
 {{- include "ansibleforms.assertNoRootInitContainer" (dict "component" $server "key" "server") }}
 apiVersion: apps/v1
 kind: Deployment
@@ -73,7 +75,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      serviceAccountName: {{ $server.serviceAccountName | default "default" }}
+      serviceAccountName: {{ include "ansibleforms.runner.serviceAccountName" . }}
 
       {{- with (include "ansibleforms.podScheduling" (dict "component" $server "root" $)) }}
       {{- . | nindent 6 }}
@@ -96,7 +98,12 @@ spec:
 
       containers:
         - name: rte
+          {{- /* The Go Runner runs containers.rte.image in each job's pod instead (RTE_IMAGE) */}}
+          {{- if $podPerJob }}
+          image: {{ $goImage | required "runner.podPerJob.image is required with runner.podPerJob.enabled" }}
+          {{- else }}
           image: {{ $rte.image | required "containers.rte.image is required in runner mode" }}
+          {{- end }}
           imagePullPolicy: {{ $rte.imagePullPolicy | default "IfNotPresent" }}
 
           {{- /* Only the kubelet's probes call it: no Service publishes it */}}
@@ -156,6 +163,30 @@ spec:
                 secretKeyRef:
                   name: {{ include "ansibleforms.keysSecretName" . }}
                   key: RTE_JOIN_TOKEN
+            {{- end }}
+
+            {{- if $podPerJob }}
+            {{- /*
+              The Go Runner: a pod per job in this namespace (its own, read from the service
+              account), from containers.rte.image, its own binary copied in from its image.
+            */}}
+            - name: RTE_ENGINE
+              value: "kubernetes"
+
+            - name: RTE_IMAGE
+              value: {{ $rte.image | required "containers.rte.image is required in runner mode" | quote }}
+
+            - name: RTE_RUNNER_IMAGE
+              value: {{ $goImage | quote }}
+
+            {{- $pull := list }}
+            {{- range ($server.imagePullSecrets | default .Values.imagePullSecrets) }}
+            {{- $pull = append $pull .name }}
+            {{- end }}
+            {{- if $pull }}
+            - name: RTE_IMAGE_PULL_SECRETS
+              value: {{ join "," $pull | quote }}
+            {{- end }}
             {{- end }}
 
             {{- with $rte.extraEnv }}

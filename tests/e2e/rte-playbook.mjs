@@ -5,7 +5,16 @@
 //
 //   kubectl cp tests/e2e/rte-playbook.mjs <pod>:/tmp/rte-playbook.mjs -c server
 //   kubectl exec <pod> -c server -- node /tmp/rte-playbook.mjs
+//
+// With a runner's name, the form runs on that runner instead (runner: <name>), a Runner
+// installed on its own that dials the app: the job goes over its outbound socket.
+//
+//   kubectl exec <pod> -c server -- node /tmp/rte-playbook.mjs ci-podjob
 import fs from "fs";
+
+const target = process.argv[2] || "";
+const formName = target ? `CI RTE ${target}` : "CI RTE";
+const formFile = target ? `ci-rte-${target}` : "ci-rte";
 
 const persistent = "/app/dist/persistent";
 const base = `http://127.0.0.1:${process.env.PORT || 80}/api/v2`;
@@ -14,13 +23,13 @@ const fail = (message) => { console.error(`::error::${message}`); process.exit(1
 // ----- A form and its playbook, on the volume the app and the RTE share -----
 fs.mkdirSync(`${persistent}/forms`, { recursive: true });
 fs.mkdirSync(`${persistent}/playbooks`, { recursive: true });
-fs.writeFileSync(`${persistent}/forms/ci-rte.yaml`, `- name: CI RTE
+fs.writeFileSync(`${persistent}/forms/${formFile}.yaml`, `- name: ${formName}
   roles: [public]
   categories: [Default]
   description: Runs a playbook on the RTE
   playbook: ci-rte.yaml
   type: ansible
-  fields:
+${target ? `  runner: ${target}\n` : ""}  fields:
     - type: text
       name: greeting
       label: Greeting
@@ -40,6 +49,7 @@ const { token } = await login.json();
 const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
 // ----- The runner the chart's seed registered, and the app reaching it -----
+if (!target) {
 const runners = (await (await fetch(`${base}/runner`, { headers })).json()).records || [];
 const rte = runners.find((r) => r.type === "rte" && r.is_default);
 if (!rte) fail(`No default runner of type rte. Runners: ${JSON.stringify(runners)}`);
@@ -52,6 +62,7 @@ const check = await fetch(`${base}/runner/${rte.id}/check`, { method: "POST", he
 const checked = await check.json();
 if (!check.ok) fail(`Test connection failed: ${JSON.stringify(checked)}`);
 console.log(`Test connection: ${JSON.stringify(checked.details)}`);
+}
 
 // ----- Launch the form and wait for the job -----
 // rawFormData too, the raw field values, as the browser sends them : with LAUNCH_VALIDATION
@@ -59,7 +70,7 @@ console.log(`Test connection: ${JSON.stringify(checked.details)}`);
 const launch = await fetch(`${base}/job`, {
   method: "POST", headers,
   body: JSON.stringify({
-    formName: "CI RTE",
+    formName,
     extravars: { greeting: "hello-from-ci" },
     rawFormData: { greeting: "hello-from-ci" },
   }),
@@ -75,7 +86,8 @@ for (let i = 0; i < 90; i++) {
   console.log(`Job ${launched.id} ended ${job.status}`);
   if (job.status !== "success") fail(`The playbook job ended ${job.status}:\n${output}`);
   if (!output.includes("Running on RTE")) fail(`The job did not run on the RTE:\n${output}`);
-  if (!output.includes("(inbound)")) fail(`The job did not go over the inbound socket:\n${output}`);
+  const mode = target ? "outbound" : "inbound";
+  if (!output.includes(`(${mode})`)) fail(`The job did not go over the ${mode} socket:\n${output}`);
   if (!output.includes("RTE says hello-from-ci")) fail(`The playbook output is missing:\n${output}`);
   console.log("The playbook ran on the RTE.");
   process.exit(0);

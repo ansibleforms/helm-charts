@@ -46,6 +46,8 @@ annotations:
       image: ghcr.io/ansibleforms/ansibleforms:7.8.0
     - name: ansibleforms-rte-full
       image: ghcr.io/ansibleforms/ansibleforms-rte-full:7.8.0
+    - name: ansibleforms-rte-runner
+      image: ghcr.io/ansibleforms/ansibleforms-rte-runner:7.8.0
     - name: mysql
       image: mysql:9.7
     - name: helm-test

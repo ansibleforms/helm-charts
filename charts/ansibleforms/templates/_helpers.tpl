@@ -549,6 +549,25 @@ runners:
 {{- if dig "enabled" false (.Values.runner | default dict) -}}true{{- else -}}false{{- end -}}
 {{- end -}}
 
+{{- /*
+  Runner mode with the Go Runner (runner.podPerJob.enabled): each job is a pod of its own,
+  which the runner's service account needs a Role for.
+*/}}
+{{- define "ansibleforms.runner.podPerJob" -}}
+{{- if and (eq (include "ansibleforms.runner.enabled" .) "true") (dig "podPerJob" "enabled" false (.Values.runner | default dict)) -}}true{{- else -}}false{{- end -}}
+{{- end -}}
+
+{{- /*
+  The runner pod's service account: containers.server.serviceAccountName, else with the Go
+  Runner the one the chart makes (<release>-rte), else the namespace default.
+*/}}
+{{- define "ansibleforms.runner.serviceAccountName" -}}
+{{- $named := dig "server" "serviceAccountName" "" (.Values.containers | default dict) -}}
+{{- if $named -}}{{ $named }}
+{{- else if eq (include "ansibleforms.runner.podPerJob" .) "true" -}}{{ include "ansibleforms.runner.fullname" . }}
+{{- else -}}default{{- end -}}
+{{- end -}}
+
 {{- /* The runner's Deployment, and the prefix of its claim */}}
 {{- define "ansibleforms.runner.fullname" -}}
 {{- printf "%s-rte" (include "ansibleforms.fullname" .) | trunc 63 | trimSuffix "-" -}}

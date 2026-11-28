@@ -100,6 +100,18 @@ runner:
   # With true, a private CA is named through NODE_EXTRA_CA_CERTS in applications.rte.env.
   # -- false accepts the app's self-signed certificate (APP_TLS_VERIFY=0), inside one trusted network only.
   appTlsVerify: true
+  # The RTE Runner written in Go (ansibleforms/runner) instead of the RTE in Node.js: it runs
+  # each job in a pod of its own, in the release's namespace, from containers.rte.image (its
+  # RTE_IMAGE), so the runner's pod stays small and a job gets a clean container. The chart
+  # adds a ServiceAccount (<release>-rte, unless containers.server.serviceAccountName names
+  # one), and a Role and RoleBinding letting it create, follow, stop and delete those pods.
+  # The jobs' pods take the release's imagePullSecrets. A namespace that enforces the
+  # restricted Pod Security Standard takes them from Runner 7.9.0 on.
+  podPerJob:
+    # -- true runs the Go Runner, a pod per job. Runner mode only.
+    enabled: false
+    # -- The Go Runner's image, copied into each job's pod too. Keep it on the app's release.
+    image: ghcr.io/ansibleforms/ansibleforms-rte-runner:7.8.0
 
 # ==============================================================================
 # MYSQL DEPLOYMENT

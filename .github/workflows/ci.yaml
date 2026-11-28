@@ -184,6 +184,11 @@ jobs:
               "own token Secret": ["--set", "runner.enabled=true",
                                    "--set", "runner.appUrl=http://forms.example.com",
                                    "--set", "containers.rte.existingTokenSecret=my-rte-token"],
+              "pod per job": ["--set", "runner.enabled=true",
+                              "--set", "runner.appUrl=https://forms.example.com",
+                              "--set", "applications.rte.token=ci-not-a-real-rte-token",
+                              "--set", "runner.podPerJob.enabled=true",
+                              "--set", "imagePullSecrets[0].name=regcred"],
           }
           for case, args in cases.items():
               docs = render(*args)
@@ -191,6 +196,11 @@ jobs:
               print(f"{case}: {kinds}")
               allowed = {"Deployment/rn-rte", "PersistentVolumeClaim/rn-rte-pvc", "Secret/rn-keys",
                          "NetworkPolicy/rn-rte", "Pod/rn-test-runner"}
+              rbac = {"ServiceAccount/rn-rte", "Role/rn-rte", "RoleBinding/rn-rte"}
+              if case == "pod per job":
+                  allowed |= rbac
+                  for k in rbac - set(kinds):
+                      failures.append(f"{case}: {k} is missing")
               for k in kinds:
                   if k not in allowed:
                       failures.append(f"{case}: {k} rendered in runner mode")
@@ -246,6 +256,31 @@ jobs:
                       failures.append(f"{case}: RTE_JOIN_TOKEN is set without runner.joinToken")
                   if env.get("APP_TLS_VERIFY", {}).get("value") != "1":
                       failures.append(f"{case}: APP_TLS_VERIFY is {env.get('APP_TLS_VERIFY')}, expected 1")
+              if case == "pod per job":
+                  # The Go Runner in the pod, the RTE image in each job's pod, and the Role
+                  # of ansibleforms/runner's deploy/kubernetes-rbac.yaml, no more
+                  if not c["image"].startswith("ghcr.io/ansibleforms/ansibleforms-rte-runner:"):
+                      failures.append(f"{case}: the runner's image is {c['image']}")
+                  want_env = {"RTE_ENGINE": "kubernetes", "RTE_IMAGE_PULL_SECRETS": "regcred",
+                              "RTE_RUNNER_IMAGE": c["image"]}
+                  for k, v in want_env.items():
+                      if env.get(k, {}).get("value") != v:
+                          failures.append(f"{case}: {k} is {env.get(k)}, expected {v}")
+                  if not env.get("RTE_IMAGE", {}).get("value", "").startswith("ghcr.io/ansibleforms/ansibleforms-rte-full:"):
+                      failures.append(f"{case}: RTE_IMAGE is {env.get('RTE_IMAGE')}, expected containers.rte.image")
+                  if pod.get("serviceAccountName") != "rn-rte":
+                      failures.append(f"{case}: the pod runs as {pod.get('serviceAccountName')}, not rn-rte")
+                  role = next(d for d in docs if d["kind"] == "Role")
+                  rules = {r["resources"][0]: sorted(r["verbs"]) for r in role["rules"]}
+                  want = {"pods": ["create", "delete", "get", "list", "patch"], "pods/log": ["get"],
+                          "pods/attach": ["create", "get"]}
+                  if rules != want:
+                      failures.append(f"{case}: the Role grants {rules}, expected {want}")
+                  binding = next(d for d in docs if d["kind"] == "RoleBinding")
+                  if binding["subjects"][0]["name"] != "rn-rte" or binding["roleRef"]["name"] != "rn-rte":
+                      failures.append(f"{case}: the RoleBinding binds {binding['subjects']} to {binding['roleRef']}")
+              elif any(k in kinds for k in rbac):
+                  failures.append(f"{case}: a ServiceAccount, Role or RoleBinding rendered without runner.podPerJob")
               if case == "own token Secret" and "Secret/rn-keys" in kinds:
                   failures.append(f"{case}: a keys Secret rendered with nothing to hold")
 
@@ -272,6 +307,7 @@ jobs:
           rte = values["containers"]["rte"]["image"]
           mysql = values["containers"]["mysql"]["image"]
           test_image = values["tests"]["image"]
+          go_runner = values["runner"]["podPerJob"]["image"]
 
           failures = []
           if ":" not in image:
@@ -282,6 +318,9 @@ jobs:
           # The RTE is released with the app and tagged alike; the two move together.
           if ":" not in rte or rte.rsplit(":", 1)[1] != app:
               failures.append(f"appVersion is {app} but containers.rte.image is {rte}")
+          # The Go Runner is released with the app too (ansibleforms/runner)
+          if ":" not in go_runner or go_runner.rsplit(":", 1)[1] != app:
+              failures.append(f"appVersion is {app} but runner.podPerJob.image is {go_runner}")
 
           # The comment in values.yaml says this one is pinned deliberately,
           # because MySQL does not support downgrades and a floating tag turns a
@@ -293,7 +332,7 @@ jobs:
           # exactly what values.yaml deploys, and nothing else.
           listed = sorted(i["image"] for i in yaml.safe_load(
               chart.get("annotations", {}).get("artifacthub.io/images", "[]")) or [])
-          deployed = sorted([image, rte, mysql, test_image])
+          deployed = sorted([image, rte, mysql, test_image, go_runner])
           if listed != deployed:
               failures.append(f"artifacthub.io/images lists {listed} but values.yaml deploys {deployed}")
 
@@ -906,6 +945,31 @@ jobs:
 
           echo "Both runners joined the app, outbound, from a restricted namespace."
           helm uninstall joined waiting --namespace runners
+
+          # The Go Runner (runner.podPerJob): it joins the same way, and a playbook form sent
+          # to it runs in a pod of its own, which the chart's Role lets it make. Its own
+          # namespace, not enforcing restricted: the Runner meets it from 7.9.0 on.
+          echo "::group::the Go Runner, a pod per job"
+          kubectl create namespace podjobs
+          join="$(api jointoken ci-podjob | tail -1)"
+          helm install podjob . --namespace podjobs \
+            --set runner.enabled=true \
+            --set runner.appUrl="$app" \
+            --set runner.name=ci-podjob \
+            --set runner.joinToken="$join" \
+            --set runner.podPerJob.enabled=true \
+            --set storages.server.size=1Gi \
+            --set storages.server.accessMode=ReadWriteOnce \
+            --wait --timeout 8m
+          api connected ci-podjob
+          kubectl -n rte cp ../../tests/e2e/rte-playbook.mjs "$pod:/tmp/rte-playbook.mjs" -c server
+          kubectl -n rte exec "$pod" -c server -- node /tmp/rte-playbook.mjs ci-podjob || {
+            kubectl -n podjobs get pods -o wide
+            kubectl -n podjobs describe pods
+            kubectl -n podjobs logs deploy/podjob-rte --tail=60
+            exit 1; }
+          echo "::endgroup::"
+          helm uninstall podjob --namespace podjobs
           helm uninstall rte --namespace rte
 
       # Generation only works where the chart can read the cluster, so it cannot

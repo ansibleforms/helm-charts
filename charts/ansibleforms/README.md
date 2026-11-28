@@ -674,6 +674,7 @@ helm install runner1 ansibleforms/ansibleforms \
 | `runner.name` | The runner name it joins as (`RTE_NAME`). Empty: the release name |
 | `runner.joinToken` | A join token made in the app, read on the first start to be approved at once |
 | `runner.appTlsVerify` | `false` accepts the app's self-signed certificate (`APP_TLS_VERIFY=0`) |
+| `runner.podPerJob.enabled` | Runs the Runner written in Go, which runs each job in a pod of its own |
 
 It renders one Deployment, `<release>-rte` (one replica, Recreate), a PVC for its spool and
 job files, `<release>-rte-pvc`, sized and classed by `storages.server`, and the
@@ -684,6 +685,16 @@ and kept across upgrades as for the RTE in the server pod, or read from
 resources, probes and extras from `containers.rte`, its environment from
 `applications.rte.env` (`HTTPS_PROXY`, `NO_PROXY`, `NODE_EXTRA_CA_CERTS`, `RTE_MAX_JOBS`),
 and the pod its scheduling and security context from `containers.server`.
+
+**A pod per job.** With `runner.podPerJob.enabled` the pod runs the
+[RTE Runner written in Go](https://github.com/ansibleforms/runner) (`runner.podPerJob.image`)
+instead of the RTE in Node.js. It runs each job in a pod of its own, in the release's
+namespace, from `containers.rte.image`, so the runner's pod stays small and every job starts
+from a clean container. The chart adds a ServiceAccount, `<release>-rte` (unless
+`containers.server.serviceAccountName` names one), and a Role and RoleBinding that let it
+create, follow, stop and delete those pods. The jobs' pods take the release's
+`imagePullSecrets`, and a namespace that enforces the restricted Pod Security Standard takes
+them from Runner 7.9.0 on.
 
 **Approval.** Without a join token the runner asks to join and waits: approve it under
 Connections > Runners, where the bell in the header counts the runners waiting. Its log
